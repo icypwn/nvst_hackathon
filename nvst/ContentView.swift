@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FamilyControls
 
 // MARK: - Mock Data
 
@@ -56,17 +57,20 @@ enum NavTab: Int, CaseIterable {
 // MARK: - Root Shell
 
 struct ContentView: View {
+    @StateObject private var manager = ScreenTimeManager.shared
     @State private var activeTab: NavTab = .home
+    @State private var showTimeSelection = false
     @Namespace private var tabAnimation
+
+    @State private var showOnboarding = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
 
-            // Page content
             switch activeTab {
             case .home:
-                HomeView()
+                HomeView(manager: manager, showTimeSelection: $showTimeSelection)
             default:
                 Text(activeTab.label)
                     .font(.largeTitle)
@@ -75,10 +79,27 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            // Floating glass tab bar
             floatingTabBar
         }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView(manager: manager)
+                .interactiveDismissDisabled(!manager.isAuthorized)
+        }
+        .sheet(isPresented: $showTimeSelection) {
+            TimeSelectionView(manager: manager)
+        }
         .preferredColorScheme(.dark)
+        .onAppear {
+            if !manager.isAuthorized {
+                showOnboarding = true
+            }
+        }
+        .onChange(of: manager.isAuthorized) { authorized in
+            if authorized { showOnboarding = false }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showTimeSelection)) { _ in
+            showTimeSelection = true
+        }
     }
 
     private var floatingTabBar: some View {
@@ -190,7 +211,10 @@ struct ContentView: View {
 // MARK: - Home View
 
 struct HomeView: View {
+    @ObservedObject var manager: ScreenTimeManager
+    @Binding var showTimeSelection: Bool
     @State private var selectedTab = 0
+    @State private var showActivityPicker = false
     let tabs = ["Today", "This Week", "All Time"]
 
     var body: some View {
@@ -199,6 +223,25 @@ struct HomeView: View {
                 headerSection
                 ringChartSection
                 tabPicker
+
+                // Activity picker button
+                Button {
+                    showActivityPicker = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text(manager.selection.applicationTokens.isEmpty
+                             ? "Select Apps to Track"
+                             : "Manage Tracked Apps (\(manager.selection.applicationTokens.count))")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Capsule().fill(.green))
+                }
+                .familyActivityPicker(isPresented: $showActivityPicker, selection: $manager.selection)
+
                 sharesSection
             }
             .padding(.horizontal, 20)
@@ -494,6 +537,12 @@ struct DonutChart: View {
         }
         return deg
     }
+}
+
+// MARK: - Notification Name
+
+extension Notification.Name {
+    static let showTimeSelection = Notification.Name("com.nvst.showTimeSelection")
 }
 
 // MARK: - Preview

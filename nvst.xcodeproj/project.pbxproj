@@ -6,6 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		794C88EE2F5CD7470070D5A3 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 794C88B12F5CD4950070D5A3 /* ManagedSettings.framework */; };
+		794C88EF2F5CD7470070D5A3 /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 794C88B32F5CD4950070D5A3 /* ManagedSettingsUI.framework */; };
+		794C88F72F5CD7470070D5A3 /* nvstShieldConfig.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 794C88ED2F5CD7470070D5A3 /* nvstShieldConfig.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7978A01C2F5CD76E007274F9 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 794C88B12F5CD4950070D5A3 /* ManagedSettings.framework */; };
+		7978A0242F5CD76E007274F9 /* nvstShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7978A01B2F5CD76E007274F9 /* nvstShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7978A02E2F5CD79D007274F9 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 794C88DB2F5CD4DB0070D5A3 /* DeviceActivity.framework */; };
+		7978A0362F5CD79D007274F9 /* nvstMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7978A02D2F5CD79D007274F9 /* nvstMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		794C88862F5CA8890070D5A3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,13 +31,80 @@
 			remoteGlobalIDString = 794C88722F5CA8870070D5A3;
 			remoteInfo = nvst;
 		};
+		794C88F52F5CD7470070D5A3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 794C886B2F5CA8870070D5A3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 794C88EC2F5CD7470070D5A3;
+			remoteInfo = nvstShieldConfig;
+		};
+		7978A0222F5CD76E007274F9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 794C886B2F5CA8870070D5A3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7978A01A2F5CD76E007274F9;
+			remoteInfo = nvstShieldAction;
+		};
+		7978A0342F5CD79D007274F9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 794C886B2F5CA8870070D5A3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7978A02C2F5CD79D007274F9;
+			remoteInfo = nvstMonitor;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		794C88C12F5CD4960070D5A3 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7978A0242F5CD76E007274F9 /* nvstShieldAction.appex in Embed Foundation Extensions */,
+				794C88F72F5CD7470070D5A3 /* nvstShieldConfig.appex in Embed Foundation Extensions */,
+				7978A0362F5CD79D007274F9 /* nvstMonitor.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		794C88732F5CA8870070D5A3 /* nvst.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = nvst.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		794C88852F5CA8890070D5A3 /* nvstTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = nvstTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		794C888F2F5CA8890070D5A3 /* nvstUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = nvstUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		794C88B12F5CD4950070D5A3 /* ManagedSettings.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ManagedSettings.framework; path = System/Library/Frameworks/ManagedSettings.framework; sourceTree = SDKROOT; };
+		794C88B32F5CD4950070D5A3 /* ManagedSettingsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ManagedSettingsUI.framework; path = System/Library/Frameworks/ManagedSettingsUI.framework; sourceTree = SDKROOT; };
+		794C88DB2F5CD4DB0070D5A3 /* DeviceActivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
+		794C88ED2F5CD7470070D5A3 /* nvstShieldConfig.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = nvstShieldConfig.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7978A01B2F5CD76E007274F9 /* nvstShieldAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = nvstShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7978A02D2F5CD79D007274F9 /* nvstMonitor.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = nvstMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		794C88F82F5CD7470070D5A3 /* Exceptions for "nvstShieldConfig" folder in "nvstShieldConfig" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 794C88EC2F5CD7470070D5A3 /* nvstShieldConfig */;
+		};
+		7978A0272F5CD76E007274F9 /* Exceptions for "nvstShieldAction" folder in "nvstShieldAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7978A01A2F5CD76E007274F9 /* nvstShieldAction */;
+		};
+		7978A0372F5CD79D007274F9 /* Exceptions for "nvstMonitor" folder in "nvstMonitor" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7978A02C2F5CD79D007274F9 /* nvstMonitor */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		794C88752F5CA8870070D5A3 /* nvst */ = {
@@ -43,6 +120,30 @@
 		794C88922F5CA8890070D5A3 /* nvstUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = nvstUITests;
+			sourceTree = "<group>";
+		};
+		794C88F02F5CD7470070D5A3 /* nvstShieldConfig */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				794C88F82F5CD7470070D5A3 /* Exceptions for "nvstShieldConfig" folder in "nvstShieldConfig" target */,
+			);
+			path = nvstShieldConfig;
+			sourceTree = "<group>";
+		};
+		7978A01D2F5CD76E007274F9 /* nvstShieldAction */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7978A0272F5CD76E007274F9 /* Exceptions for "nvstShieldAction" folder in "nvstShieldAction" target */,
+			);
+			path = nvstShieldAction;
+			sourceTree = "<group>";
+		};
+		7978A02F2F5CD79D007274F9 /* nvstMonitor */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7978A0372F5CD79D007274F9 /* Exceptions for "nvstMonitor" folder in "nvstMonitor" target */,
+			);
+			path = nvstMonitor;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +170,31 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		794C88EA2F5CD7470070D5A3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				794C88EE2F5CD7470070D5A3 /* ManagedSettings.framework in Frameworks */,
+				794C88EF2F5CD7470070D5A3 /* ManagedSettingsUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7978A0182F5CD76E007274F9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7978A01C2F5CD76E007274F9 /* ManagedSettings.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7978A02A2F5CD79D007274F9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7978A02E2F5CD79D007274F9 /* DeviceActivity.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +204,10 @@
 				794C88752F5CA8870070D5A3 /* nvst */,
 				794C88882F5CA8890070D5A3 /* nvstTests */,
 				794C88922F5CA8890070D5A3 /* nvstUITests */,
+				794C88F02F5CD7470070D5A3 /* nvstShieldConfig */,
+				7978A01D2F5CD76E007274F9 /* nvstShieldAction */,
+				7978A02F2F5CD79D007274F9 /* nvstMonitor */,
+				794C88B02F5CD4950070D5A3 /* Frameworks */,
 				794C88742F5CA8870070D5A3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,8 +218,21 @@
 				794C88732F5CA8870070D5A3 /* nvst.app */,
 				794C88852F5CA8890070D5A3 /* nvstTests.xctest */,
 				794C888F2F5CA8890070D5A3 /* nvstUITests.xctest */,
+				794C88ED2F5CD7470070D5A3 /* nvstShieldConfig.appex */,
+				7978A01B2F5CD76E007274F9 /* nvstShieldAction.appex */,
+				7978A02D2F5CD79D007274F9 /* nvstMonitor.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		794C88B02F5CD4950070D5A3 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				794C88B12F5CD4950070D5A3 /* ManagedSettings.framework */,
+				794C88B32F5CD4950070D5A3 /* ManagedSettingsUI.framework */,
+				794C88DB2F5CD4DB0070D5A3 /* DeviceActivity.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -102,10 +245,14 @@
 				794C886F2F5CA8870070D5A3 /* Sources */,
 				794C88702F5CA8870070D5A3 /* Frameworks */,
 				794C88712F5CA8870070D5A3 /* Resources */,
+				794C88C12F5CD4960070D5A3 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				794C88F62F5CD7470070D5A3 /* PBXTargetDependency */,
+				7978A0232F5CD76E007274F9 /* PBXTargetDependency */,
+				7978A0352F5CD79D007274F9 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				794C88752F5CA8870070D5A3 /* nvst */,
@@ -163,6 +310,72 @@
 			productReference = 794C888F2F5CA8890070D5A3 /* nvstUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		794C88EC2F5CD7470070D5A3 /* nvstShieldConfig */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 794C88F92F5CD7470070D5A3 /* Build configuration list for PBXNativeTarget "nvstShieldConfig" */;
+			buildPhases = (
+				794C88E92F5CD7470070D5A3 /* Sources */,
+				794C88EA2F5CD7470070D5A3 /* Frameworks */,
+				794C88EB2F5CD7470070D5A3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				794C88F02F5CD7470070D5A3 /* nvstShieldConfig */,
+			);
+			name = nvstShieldConfig;
+			packageProductDependencies = (
+			);
+			productName = nvstShieldConfig;
+			productReference = 794C88ED2F5CD7470070D5A3 /* nvstShieldConfig.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		7978A01A2F5CD76E007274F9 /* nvstShieldAction */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7978A0282F5CD76E007274F9 /* Build configuration list for PBXNativeTarget "nvstShieldAction" */;
+			buildPhases = (
+				7978A0172F5CD76E007274F9 /* Sources */,
+				7978A0182F5CD76E007274F9 /* Frameworks */,
+				7978A0192F5CD76E007274F9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7978A01D2F5CD76E007274F9 /* nvstShieldAction */,
+			);
+			name = nvstShieldAction;
+			packageProductDependencies = (
+			);
+			productName = nvstShieldAction;
+			productReference = 7978A01B2F5CD76E007274F9 /* nvstShieldAction.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		7978A02C2F5CD79D007274F9 /* nvstMonitor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7978A0382F5CD79D007274F9 /* Build configuration list for PBXNativeTarget "nvstMonitor" */;
+			buildPhases = (
+				7978A0292F5CD79D007274F9 /* Sources */,
+				7978A02A2F5CD79D007274F9 /* Frameworks */,
+				7978A02B2F5CD79D007274F9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7978A02F2F5CD79D007274F9 /* nvstMonitor */,
+			);
+			name = nvstMonitor;
+			packageProductDependencies = (
+			);
+			productName = nvstMonitor;
+			productReference = 7978A02D2F5CD79D007274F9 /* nvstMonitor.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +397,15 @@
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = 794C88722F5CA8870070D5A3;
 					};
+					794C88EC2F5CD7470070D5A3 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					7978A01A2F5CD76E007274F9 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					7978A02C2F5CD79D007274F9 = {
+						CreatedOnToolsVersion = 16.4;
+					};
 				};
 			};
 			buildConfigurationList = 794C886E2F5CA8870070D5A3 /* Build configuration list for PBXProject "nvst" */;
@@ -203,6 +425,9 @@
 				794C88722F5CA8870070D5A3 /* nvst */,
 				794C88842F5CA8890070D5A3 /* nvstTests */,
 				794C888E2F5CA8890070D5A3 /* nvstUITests */,
+				794C88EC2F5CD7470070D5A3 /* nvstShieldConfig */,
+				7978A01A2F5CD76E007274F9 /* nvstShieldAction */,
+				7978A02C2F5CD79D007274F9 /* nvstMonitor */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +448,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		794C888D2F5CA8890070D5A3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		794C88EB2F5CD7470070D5A3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7978A0192F5CD76E007274F9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7978A02B2F5CD79D007274F9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +499,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		794C88E92F5CD7470070D5A3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7978A0172F5CD76E007274F9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7978A0292F5CD79D007274F9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +532,21 @@
 			isa = PBXTargetDependency;
 			target = 794C88722F5CA8870070D5A3 /* nvst */;
 			targetProxy = 794C88902F5CA8890070D5A3 /* PBXContainerItemProxy */;
+		};
+		794C88F62F5CD7470070D5A3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 794C88EC2F5CD7470070D5A3 /* nvstShieldConfig */;
+			targetProxy = 794C88F52F5CD7470070D5A3 /* PBXContainerItemProxy */;
+		};
+		7978A0232F5CD76E007274F9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7978A01A2F5CD76E007274F9 /* nvstShieldAction */;
+			targetProxy = 7978A0222F5CD76E007274F9 /* PBXContainerItemProxy */;
+		};
+		7978A0352F5CD79D007274F9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7978A02C2F5CD79D007274F9 /* nvstMonitor */;
+			targetProxy = 7978A0342F5CD79D007274F9 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -395,6 +677,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = nvst/nvst.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7W5GA4U4F7;
@@ -405,7 +688,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -424,6 +707,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = nvst/nvst.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7W5GA4U4F7;
@@ -434,7 +718,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -520,6 +804,168 @@
 			};
 			name = Release;
 		};
+		794C88FA2F5CD7470070D5A3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = nvstShieldConfig/nvstShieldConfig.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7W5GA4U4F7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = nvstShieldConfig/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = nvstShieldConfig;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = icy.nvst.nvstShieldConfig;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		794C88FB2F5CD7470070D5A3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = nvstShieldConfig/nvstShieldConfig.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7W5GA4U4F7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = nvstShieldConfig/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = nvstShieldConfig;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = icy.nvst.nvstShieldConfig;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		7978A0252F5CD76E007274F9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = nvstShieldAction/nvstShieldAction.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7W5GA4U4F7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = nvstShieldAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = nvstShieldAction;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = icy.nvst.nvstShieldAction;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7978A0262F5CD76E007274F9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = nvstShieldAction/nvstShieldAction.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7W5GA4U4F7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = nvstShieldAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = nvstShieldAction;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = icy.nvst.nvstShieldAction;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		7978A0392F5CD79D007274F9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = nvstMonitor/nvstMonitor.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7W5GA4U4F7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = nvstMonitor/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = nvstMonitor;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = icy.nvst.nvstMonitor;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7978A03A2F5CD79D007274F9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = nvstMonitor/nvstMonitor.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7W5GA4U4F7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = nvstMonitor/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = nvstMonitor;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = icy.nvst.nvstMonitor;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -555,6 +1001,33 @@
 			buildConfigurations = (
 				794C88A02F5CA8890070D5A3 /* Debug */,
 				794C88A12F5CA8890070D5A3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		794C88F92F5CD7470070D5A3 /* Build configuration list for PBXNativeTarget "nvstShieldConfig" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				794C88FA2F5CD7470070D5A3 /* Debug */,
+				794C88FB2F5CD7470070D5A3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7978A0282F5CD76E007274F9 /* Build configuration list for PBXNativeTarget "nvstShieldAction" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7978A0252F5CD76E007274F9 /* Debug */,
+				7978A0262F5CD76E007274F9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7978A0382F5CD79D007274F9 /* Build configuration list for PBXNativeTarget "nvstMonitor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7978A0392F5CD79D007274F9 /* Debug */,
+				7978A03A2F5CD79D007274F9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
