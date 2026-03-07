@@ -76,11 +76,7 @@ struct ContentView: View {
             case .portfolio:
                 PortfolioView()
             case .settings:
-                Text(activeTab.label)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                SettingsView()
             }
 
             floatingTabBar
