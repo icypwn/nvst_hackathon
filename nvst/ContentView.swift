@@ -29,28 +29,181 @@ let mockShares: [AppShare] = [
     AppShare(name: "Twitter", iconLetter: "X", iconColors: [.blue], timeString: "8m today", gainAmount: "+$0.90", stockTicker: "0.0031 TWTR", ringColor: .green, percentage: 0.04),
 ]
 
-// MARK: - Home View
+// MARK: - Tab Item
+
+enum NavTab: Int, CaseIterable {
+    case home, appPicker, portfolio, settings
+
+    var label: String {
+        switch self {
+        case .home: return "Home"
+        case .appPicker: return "Apps"
+        case .portfolio: return "Portfolio"
+        case .settings: return "Settings"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .home: return "house.fill"
+        case .appPicker: return "square.grid.2x2"
+        case .portfolio: return "chart.pie.fill"
+        case .settings: return "gearshape.fill"
+        }
+    }
+}
+
+// MARK: - Root Shell
 
 struct ContentView: View {
+    @State private var activeTab: NavTab = .home
+    @Namespace private var tabAnimation
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.ignoresSafeArea()
+
+            // Page content
+            switch activeTab {
+            case .home:
+                HomeView()
+            default:
+                Text(activeTab.label)
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            // Floating glass tab bar
+            floatingTabBar
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var floatingTabBar: some View {
+        #if swift(>=6.1)
+        // iOS 26+ with liquid glass
+        GlassEffectContainer {
+            HStack(spacing: 8) {
+                ForEach(NavTab.allCases, id: \.rawValue) { tab in
+                    let isActive = activeTab == tab
+                    Button {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                            activeTab = tab
+                        }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: isActive ? 22 : 20, weight: .medium))
+                                .foregroundColor(isActive ? .green : Color(white: 0.7))
+
+                            Text(tab.label)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(isActive ? .green : Color(white: 0.45))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .glassEffect(
+                            isActive ? .regular.tint(.green).interactive() : .clear,
+                            in: .capsule
+                        )
+                        .glassEffectID(tab.rawValue, in: tabAnimation)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .glassEffect(.regular, in: .capsule)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+        #else
+        // Fallback for older toolchains
+        fallbackTabBar
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        #endif
+    }
+
+    private var fallbackTabBar: some View {
+        HStack(spacing: 8) {
+            ForEach(NavTab.allCases, id: \.rawValue) { tab in
+                let isActive = activeTab == tab
+                Button {
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                        activeTab = tab
+                    }
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: isActive ? 22 : 20, weight: .medium))
+                            .foregroundColor(isActive ? .green : Color(white: 0.7))
+
+                        Text(tab.label)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(isActive ? .green : Color(white: 0.45))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        Group {
+                            if isActive {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.08))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color.white.opacity(0.25),
+                                                        Color.white.opacity(0.05)
+                                                    ],
+                                                    startPoint: .top,
+                                                    endPoint: .bottom
+                                                ),
+                                                lineWidth: 1
+                                            )
+                                    )
+                                    .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+                                    .matchedGeometryEffect(id: "indicator", in: tabAnimation)
+                            }
+                        }
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.5), radius: 20, y: 10)
+        )
+    }
+}
+
+// MARK: - Home View
+
+struct HomeView: View {
     @State private var selectedTab = 0
     let tabs = ["Today", "This Week", "All Time"]
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    headerSection
-                    ringChartSection
-                    tabPicker
-                    sharesSection
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 40)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                headerSection
+                ringChartSection
+                tabPicker
+                sharesSection
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 120)
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Header
@@ -243,39 +396,53 @@ struct RoundedArcSegment: Shape {
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let thickness = outerRadius - innerRadius
         let cr = min(cornerRadius, thickness / 2)
-        let midR = (innerRadius + outerRadius) / 2
-        let angularInset = cr > 0 ? Angle.radians(Double(cr / midR)) : .zero
 
-        let adjustedStart = startAngle + angularInset
-        let adjustedEnd = endAngle - angularInset
-
-        guard adjustedEnd > adjustedStart else {
-            var path = Path()
-            let pt = pointOnCircle(center: center, radius: midR, angle: startAngle)
-            path.addEllipse(in: CGRect(x: pt.x - cr, y: pt.y - cr, width: cr * 2, height: cr * 2))
-            return path
-        }
+        // Angular insets so corners don't exceed the arc length
+        let outerInset = cr > 0 ? Angle.radians(Double(cr / outerRadius)) : .zero
+        let innerInset = cr > 0 ? Angle.radians(Double(cr / innerRadius)) : .zero
 
         var path = Path()
 
-        let outerStart = pointOnCircle(center: center, radius: outerRadius, angle: adjustedStart)
-        path.move(to: outerStart)
+        // 1. Move to outer arc start (after start corner)
+        path.move(to: pt(center, outerRadius, startAngle + outerInset))
 
-        path.addArc(center: center, radius: outerRadius, startAngle: adjustedStart, endAngle: adjustedEnd, clockwise: false)
+        // 2. Outer arc
+        path.addArc(center: center, radius: outerRadius,
+                     startAngle: startAngle + outerInset,
+                     endAngle: endAngle - outerInset,
+                     clockwise: false)
 
-        let endCapCenter = pointOnCircle(center: center, radius: midR, angle: adjustedEnd)
-        path.addArc(center: endCapCenter, radius: cr, startAngle: adjustedEnd, endAngle: adjustedEnd + .degrees(180), clockwise: false)
+        // 3. Corner: outer-end → inner-end (quad curve through the sharp corner)
+        path.addQuadCurve(
+            to: pt(center, innerRadius + cr, endAngle),
+            control: pt(center, outerRadius, endAngle)
+        )
+        path.addQuadCurve(
+            to: pt(center, innerRadius, endAngle - innerInset),
+            control: pt(center, innerRadius, endAngle)
+        )
 
-        path.addArc(center: center, radius: innerRadius, startAngle: adjustedEnd, endAngle: adjustedStart, clockwise: true)
+        // 4. Inner arc (reverse)
+        path.addArc(center: center, radius: innerRadius,
+                     startAngle: endAngle - innerInset,
+                     endAngle: startAngle + innerInset,
+                     clockwise: true)
 
-        let startCapCenter = pointOnCircle(center: center, radius: midR, angle: adjustedStart)
-        path.addArc(center: startCapCenter, radius: cr, startAngle: adjustedStart + .degrees(180), endAngle: adjustedStart, clockwise: false)
+        // 5. Corner: inner-start → outer-start (quad curve through the sharp corner)
+        path.addQuadCurve(
+            to: pt(center, innerRadius + cr, startAngle),
+            control: pt(center, innerRadius, startAngle)
+        )
+        path.addQuadCurve(
+            to: pt(center, outerRadius, startAngle + outerInset),
+            control: pt(center, outerRadius, startAngle)
+        )
 
         path.closeSubpath()
         return path
     }
 
-    private func pointOnCircle(center: CGPoint, radius: CGFloat, angle: Angle) -> CGPoint {
+    private func pt(_ center: CGPoint, _ radius: CGFloat, _ angle: Angle) -> CGPoint {
         CGPoint(
             x: center.x + radius * CGFloat(cos(angle.radians)),
             y: center.y + radius * CGFloat(sin(angle.radians))
@@ -288,9 +455,9 @@ struct RoundedArcSegment: Shape {
 struct DonutChart: View {
     let shares: [AppShare]
     let thickness: CGFloat = 28
-    let gapDegrees: Double = 4
+    let gapDegrees: Double = 2
     /// Adjust this to control endpoint roundness: 0 = flat, thickness/2 = fully round
-    let cornerRadius: CGFloat = 0
+    let cornerRadius: CGFloat = 8
 
     var body: some View {
         GeometryReader { geo in
