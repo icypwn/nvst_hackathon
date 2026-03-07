@@ -73,7 +73,9 @@ struct ContentView: View {
                 HomeView(manager: manager, showTimeSelection: $showTimeSelection)
             case .appPicker:
                 AppRulesView()
-            default:
+            case .portfolio:
+                PortfolioView()
+            case .settings:
                 Text(activeTab.label)
                     .font(.largeTitle)
                     .fontWeight(.bold)
@@ -128,7 +130,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
                         .glassEffect(
-                            isActive ? .regular.tint(.green).interactive() : .clear,
+                            isActive ? .standard.tint(.green).interactive() : .clear,
                             in: .capsule
                         )
                         .glassEffectID(tab.rawValue, in: tabAnimation)
@@ -137,7 +139,7 @@ struct ContentView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
-            .glassEffect(.regular, in: .capsule)
+            .glassEffect(GlassMaterial.regular, in: .capsule)
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
