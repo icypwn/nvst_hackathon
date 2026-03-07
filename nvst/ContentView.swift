@@ -71,6 +71,8 @@ struct ContentView: View {
             switch activeTab {
             case .home:
                 HomeView(manager: manager, showTimeSelection: $showTimeSelection)
+            case .appPicker:
+                AppRulesView()
             default:
                 Text(activeTab.label)
                     .font(.largeTitle)
