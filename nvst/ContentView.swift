@@ -67,6 +67,8 @@ struct ContentView: View {
             switch activeTab {
             case .home:
                 HomeView()
+            case .appPicker:
+                AppRulesView()
             default:
                 Text(activeTab.label)
                     .font(.largeTitle)
