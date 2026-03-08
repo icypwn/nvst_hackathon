@@ -71,18 +71,39 @@ class ScreenTimeManager: ObservableObject {
     // MARK: - Scheduling
 
     func unlockAndScheduleReblock(minutes: Int) {
-        // 1. Unblock immediately
+        // 1. Unblock only the specific app that triggered the unlock
         isUnlocked = true
-        store.shield.applications = nil
         sharedDefaults?.set(true, forKey: "isUnlocked")
+
+        var currentTokens = loadTokensFromAppGroup()
+        if currentTokens.isEmpty {
+            currentTokens = selection.applicationTokens
+        }
+
+        if let encodedToken = sharedDefaults?.string(forKey: "lastBlockedToken"),
+           let data = Data(base64Encoded: encodedToken),
+           let token = try? JSONDecoder().decode(ApplicationToken.self, from: data) {
+            currentTokens.remove(token)
+        } else {
+            // If we don't know which app requested unlock, temporarily unblock all.
+            currentTokens.removeAll()
+        }
+
+        if currentTokens.isEmpty {
+            store.shield.applications = nil
+        } else {
+            store.shield.applications = currentTokens
+        }
+        saveTokensToAppGroup(currentTokens)
 
         // 2. Stop any existing monitoring
         center.stopMonitoring([.reblock])
 
-        // Schedule isUnlocked reset after the timer
+        // Schedule isUnlocked reset and reblock after the timer
         DispatchQueue.main.asyncAfter(deadline: .now() + Double(minutes * 60)) { [weak self] in
             self?.isUnlocked = false
             self?.sharedDefaults?.set(false, forKey: "isUnlocked")
+            self?.applyShield()
         }
 
         // 3. Schedule a 15-minute reblock interval starting X minutes from now
@@ -99,7 +120,6 @@ class ScreenTimeManager: ObservableObject {
             try center.startMonitoring(.reblock, during: schedule)
         } catch {
             print("Failed to schedule reblock: \(error)")
-            // Safety: re-block immediately if scheduling fails
             applyShield()
         }
     }
@@ -122,5 +142,16 @@ class ScreenTimeManager: ObservableObject {
             return data.base64EncodedString()
         }
         sharedDefaults?.set(encoded, forKey: "savedBlockedTokens")
+    }
+
+    private func loadTokensFromAppGroup() -> Set<ApplicationToken> {
+        guard let encoded = sharedDefaults?.array(forKey: "savedBlockedTokens") as? [String] else {
+            return []
+        }
+        let decoded = encoded.compactMap { base64 -> ApplicationToken? in
+            guard let data = Data(base64Encoded: base64) else { return nil }
+            return try? JSONDecoder().decode(ApplicationToken.self, from: data)
+        }
+        return Set(decoded)
     }
 }

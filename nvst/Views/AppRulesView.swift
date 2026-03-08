@@ -1,4 +1,5 @@
 import SwiftUI
+import ManagedSettings
 import FamilyControls
 
 struct AppRulesView: View {
@@ -9,6 +10,11 @@ struct AppRulesView: View {
     @State private var newSelection = FamilyActivitySelection()
 
     private static let rulesKey = "savedRules"
+
+    private func deleteRule(id: String) {
+        rules.removeAll { $0.id == id }
+        saveRules()
+    }
 
     private func saveRules() {
         if let data = try? JSONEncoder().encode(rules) {
@@ -26,14 +32,31 @@ struct AppRulesView: View {
 
     private func applyShields() {
         let manager = ScreenTimeManager.shared
-        guard !manager.isUnlocked else { return }
-        var selection = FamilyActivitySelection()
+        var tokens = Set<ApplicationToken>()
         for rule in rules where rule.isActive {
             if let token = rule.applicationToken {
-                selection.applicationTokens.insert(token)
+                tokens.insert(token)
             }
         }
-        manager.selection = selection
+
+        // If an app is currently unlocked, exclude it from shields
+        if manager.isUnlocked,
+           let sharedDefaults = UserDefaults(suiteName: appGroupID),
+           let encodedToken = sharedDefaults.string(forKey: "lastBlockedToken"),
+           let data = Data(base64Encoded: encodedToken),
+           let unlockedToken = try? JSONDecoder().decode(ApplicationToken.self, from: data) {
+            tokens.remove(unlockedToken)
+            // Apply directly to the store to avoid triggering didSet fully
+            if tokens.isEmpty {
+                manager.store.shield.applications = nil
+            } else {
+                manager.store.shield.applications = tokens
+            }
+        } else {
+            var selection = FamilyActivitySelection()
+            selection.applicationTokens = tokens
+            manager.selection = selection
+        }
     }
 
     var body: some View {
@@ -47,7 +70,13 @@ struct AppRulesView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     ForEach($rules) { $rule in
-                        RuleCardView(rule: $rule)
+                        SwipeToDeleteWrapper {
+                            RuleCardView(rule: $rule)
+                        } onDelete: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                deleteRule(id: rule.id)
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -202,6 +231,60 @@ struct AppRulesView: View {
                     .foregroundColor(.white)
             }
             Spacer()
+        }
+    }
+}
+
+struct SwipeToDeleteWrapper<Content: View>: View {
+    let content: Content
+    let onDelete: () -> Void
+    @State private var offset: CGFloat = 0
+    @State private var showDelete = false
+
+    init(@ViewBuilder content: () -> Content, onDelete: @escaping () -> Void) {
+        self.content = content()
+        self.onDelete = onDelete
+    }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            // Delete background
+            HStack {
+                Spacer()
+                Button {
+                    onDelete()
+                } label: {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 70)
+                }
+            }
+            .padding(.trailing, 8)
+            .opacity(showDelete ? 1 : 0)
+
+            // Content
+            content
+                .offset(x: offset)
+                .gesture(
+                    DragGesture(minimumDistance: 30)
+                        .onChanged { value in
+                            if value.translation.width < 0 {
+                                offset = value.translation.width
+                                showDelete = offset < -40
+                            }
+                        }
+                        .onEnded { value in
+                            if value.translation.width < -120 {
+                                onDelete()
+                            } else {
+                                withAnimation(.spring(response: 0.3)) {
+                                    offset = 0
+                                    showDelete = false
+                                }
+                            }
+                        }
+                )
         }
     }
 }

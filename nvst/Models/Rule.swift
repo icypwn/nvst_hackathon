@@ -110,7 +110,7 @@ struct Rule: Identifiable, Codable, Equatable {
     var isActive: Bool
     var applicationToken: ApplicationToken?
 
-    // Not persisted — always defaults to [.gray]
+    // Gray isn't persisted
     var gradientColors: [Color] {
         [.gray]
     }

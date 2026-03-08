@@ -8,6 +8,9 @@
 import SwiftUI
 import FamilyControls
 import ManagedSettings
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Ring Data
 
@@ -52,9 +55,11 @@ struct ContentView: View {
     @StateObject private var manager = ScreenTimeManager.shared
     @State private var activeTab: NavTab = .home
     @State private var showTimeSelection = false
+    @AppStorage("portfolioRefreshStamp") private var portfolioRefreshStamp = 0
     @Namespace private var tabAnimation
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("tabSwitchHapticsEnabled") private var tabSwitchHapticsEnabled = true
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -71,7 +76,7 @@ struct ContentView: View {
                 case .appPicker:
                     AppRulesView()
                 case .portfolio:
-                    PortfolioView()
+                    PortfolioView(refreshTrigger: portfolioRefreshStamp)
                 case .settings:
                     SettingsView()
                 }
@@ -91,6 +96,9 @@ struct ContentView: View {
                 showTimeSelection = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("com.nvst.usageRecorded"))) { _ in
+            portfolioRefreshStamp = Int(Date().timeIntervalSince1970 * 1000)
+        }
     }
 
     private var floatingTabBar: some View {
@@ -102,7 +110,7 @@ struct ContentView: View {
                     let isActive = activeTab == tab
                     Button {
                         withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
-                            activeTab = tab
+                            selectTab(tab)
                         }
                     } label: {
                         VStack(spacing: 2) {
@@ -144,7 +152,7 @@ struct ContentView: View {
                 let isActive = activeTab == tab
                 Button {
                     withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
-                        activeTab = tab
+                        selectTab(tab)
                     }
                 } label: {
                     VStack(spacing: 2) {
@@ -196,6 +204,16 @@ struct ContentView: View {
                 )
                 .shadow(color: .black.opacity(0.5), radius: 20, y: 10)
         )
+    }
+
+    private func selectTab(_ tab: NavTab) {
+        let wasDifferentTab = activeTab != tab
+        activeTab = tab
+
+        guard wasDifferentTab, tabSwitchHapticsEnabled else { return }
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
     }
 }
 
@@ -342,7 +360,7 @@ struct HomeView: View {
                     .font(.subheadline)
                     .foregroundColor(.gray)
                 Text("$\(String(format: "%.2f", filteredTotals.invested))")
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .font(.system(size: 48, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 HStack(spacing: 4) {
                     Image(systemName: "clock")

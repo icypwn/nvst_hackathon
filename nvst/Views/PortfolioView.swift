@@ -1,13 +1,15 @@
 import SwiftUI
 
 struct PortfolioView: View {
+    let refreshTrigger: Int
     @State private var selectedTimeRange = 2
-    @State private var showAllHoldings = false
     @State private var showAllActivity = false
     @State private var selectedAsset: AssetHolding?
     @Namespace private var portfolioAnimation
     @State private var rules: [Rule] = []
     @State private var localUsage: [DailyUsage] = []
+    @State private var lastHandledRefreshTrigger = -1
+    @State private var refreshBurstGeneration = 0
 
     @StateObject private var viewModel = PortfolioViewModel()
 
@@ -40,19 +42,41 @@ struct PortfolioView: View {
         return totalMinutes / 60.0
     }
 
+    private var convertedDisplay: (value: String, unit: String) {
+        let totalMinutes = filteredUsage.reduce(0) { $0 + $1.minutes }
+        if totalMinutes < 60 {
+            return (value: String(Int(totalMinutes.rounded())), unit: "m")
+        }
+        return (value: String(format: "%.1f", convertedHours), unit: "h")
+    }
+
+    private var recentActivityPreview: [ActivityEntry] {
+        Array(viewModel.recentActivity.flatMap(\.items).prefix(4))
+    }
+
     private var topAppRule: Rule? {
         let activeRules = rules.filter { $0.isActive }
         guard !activeRules.isEmpty, !filteredUsage.isEmpty else { return nil }
+        let activeRuleIds = Set(activeRules.map(\.id))
 
         var minutesByRule: [String: Double] = [:]
         for entry in filteredUsage {
+            guard activeRuleIds.contains(entry.ruleId) else { continue }
             minutesByRule[entry.ruleId, default: 0] += entry.minutes
         }
 
-        guard let topRuleId = minutesByRule.max(by: { $0.value < $1.value })?.key,
-              let topRule = activeRules.first(where: { $0.id == topRuleId }) else {
-            return nil
+        let sortedRuleIds = minutesByRule
+            .sorted { $0.value > $1.value }
+            .map(\.key)
+
+        if let withToken = sortedRuleIds.first(where: { ruleId in
+            activeRules.first(where: { $0.id == ruleId })?.applicationToken != nil
+        }), let topRule = activeRules.first(where: { $0.id == withToken }) {
+            return topRule
         }
+
+        guard let topRuleId = sortedRuleIds.first,
+              let topRule = activeRules.first(where: { $0.id == topRuleId }) else { return nil }
         return topRule
     }
 
@@ -76,14 +100,6 @@ struct PortfolioView: View {
                 .padding(.bottom, 100)
             }
 
-            if showAllHoldings {
-                AllHoldingsView(isVisible: $showAllHoldings, holdings: viewModel.holdings, onSelect: { asset in
-                    selectedAsset = asset
-                })
-                .transition(.move(edge: .trailing))
-                .zIndex(10)
-            }
-
             if showAllActivity {
                 AllActivityView(isVisible: $showAllActivity, activities: viewModel.recentActivity)
                 .transition(.move(edge: .trailing))
@@ -91,16 +107,30 @@ struct PortfolioView: View {
             }
         }
         .sheet(item: $selectedAsset) { asset in
-            PortfolioDetailView(asset: asset)
+            if #available(iOS 16.4, *) {
+                PortfolioDetailView(asset: asset)
+                    .presentationBackground(Color(white: 0.08))
+            } else {
+                PortfolioDetailView(asset: asset)
+            }
         }
         .onAppear {
-            viewModel.fetchPortfolio()
-            viewModel.fetchHistory(period: timeRangeAPICodes[selectedTimeRange])
+            forceRefreshPortfolio()
             localUsage = ScreenTimeStore.load()
             if let data = UserDefaults.standard.data(forKey: Self.rulesKey),
                let decoded = try? JSONDecoder().decode([Rule].self, from: data) {
                 rules = decoded
             }
+            lastHandledRefreshTrigger = refreshTrigger
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("com.nvst.usageRecorded"))) { _ in
+            forceRefreshPortfolio()
+            localUsage = ScreenTimeStore.load()
+        }
+        .onChange(of: refreshTrigger) { newValue in
+            guard newValue != lastHandledRefreshTrigger else { return }
+            lastHandledRefreshTrigger = newValue
+            forceRefreshPortfolio()
         }
     }
 
@@ -146,6 +176,22 @@ struct PortfolioView: View {
         }
     }
 
+    private func forceRefreshPortfolio() {
+        refreshBurstGeneration += 1
+        let generation = refreshBurstGeneration
+        let delays: [TimeInterval] = [0.0, 0.8, 1.6, 3.0, 5.0]
+
+        for delay in delays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard generation == refreshBurstGeneration else { return }
+                viewModel.fetchPortfolio()
+                if delay == 0.0 {
+                    viewModel.fetchHistory(period: timeRangeAPICodes[selectedTimeRange])
+                }
+            }
+        }
+    }
+
     private var balanceSection: some View {
         VStack(spacing: 4) {
             Text("PORTFOLIO VALUE")
@@ -188,25 +234,32 @@ struct PortfolioView: View {
         GeometryReader { geo in
             ZStack {
                 if !viewModel.historicalEquity.isEmpty {
-                    let minVal = viewModel.historicalEquity.min() ?? 0
-                    let maxVal = viewModel.historicalEquity.max() ?? (minVal + 1)
-                    let range = max(maxVal - minVal, 1.0)
-                    let stepX = geo.size.width / CGFloat(max(viewModel.historicalEquity.count - 1, 1))
+                    let data = viewModel.historicalEquity
+                    let minVal = data.min() ?? 0
+                    let maxVal = data.max() ?? minVal
+                    let hasVariance = maxVal > minVal
+                    let stepX = geo.size.width / CGFloat(max(data.count - 1, 1))
+                    let points: [CGPoint] = data.enumerated().map { index, value in
+                        let x = CGFloat(index) * stepX
+                        let y: CGFloat
+                        if hasVariance {
+                            let normalized = (value - minVal) / (maxVal - minVal)
+                            y = geo.size.height - CGFloat(normalized) * geo.size.height
+                        } else {
+                            // Flat datasets should render as a centered horizontal line.
+                            y = geo.size.height / 2
+                        }
+                        return CGPoint(x: x, y: y)
+                    }
 
                     Path { path in
-                        for (index, value) in viewModel.historicalEquity.enumerated() {
-                            let x = CGFloat(index) * stepX
-                            let y = geo.size.height - CGFloat((value - minVal) / range) * geo.size.height
-
-                            if index == 0 {
-                                path.move(to: CGPoint(x: x, y: y))
-                            } else {
-                                path.addLine(to: CGPoint(x: x, y: y))
-                            }
+                        guard let first = points.first else { return }
+                        path.move(to: first)
+                        for point in points.dropFirst() {
+                            path.addLine(to: point)
                         }
-
-                        if viewModel.historicalEquity.count == 1 {
-                            path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
+                        if points.count == 1 {
+                            path.addLine(to: CGPoint(x: geo.size.width, y: first.y))
                         }
                     }
                     .stroke(Color(red: 0.19, green: 0.82, blue: 0.35), lineWidth: 3)
@@ -215,19 +268,13 @@ struct PortfolioView: View {
                                    startPoint: .top, endPoint: .bottom)
                     .mask(
                         Path { path in
-                            for (index, value) in viewModel.historicalEquity.enumerated() {
-                                let x = CGFloat(index) * stepX
-                                let y = geo.size.height - CGFloat((value - minVal) / range) * geo.size.height
-
-                                if index == 0 {
-                                    path.move(to: CGPoint(x: x, y: y))
-                                } else {
-                                    path.addLine(to: CGPoint(x: x, y: y))
-                                }
+                            guard let first = points.first else { return }
+                            path.move(to: first)
+                            for point in points.dropFirst() {
+                                path.addLine(to: point)
                             }
-
-                            if viewModel.historicalEquity.count == 1 {
-                                path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
+                            if points.count == 1 {
+                                path.addLine(to: CGPoint(x: geo.size.width, y: first.y))
                             }
 
                             path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height))
@@ -284,7 +331,7 @@ struct PortfolioView: View {
 
     private var statWidgetsSection: some View {
         HStack(spacing: 16) {
-            statWidget(icon: "clock.arrow.2.circlepath", color: .blue, label: "Converted", value: String(format: "%.1f", convertedHours), unit: "HRS")
+            statWidget(icon: "clock.arrow.2.circlepath", color: .blue, label: "Converted", value: convertedDisplay.value, unit: convertedDisplay.unit)
             topAppWidget
         }
         .padding(.horizontal, 24)
@@ -293,18 +340,15 @@ struct PortfolioView: View {
 
     private var topAppWidget: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let rule = topAppRule, let token = rule.applicationToken {
-                Label(token)
-                    .labelStyle(.iconOnly)
-                    .scaleEffect(2.0)
-                    .frame(width: 40, height: 40)
+            if let rule = topAppRule {
+                topAppIcon(for: rule)
             } else {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.purple.opacity(0.2))
+                        .fill(Color(white: 0.16))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "flame.fill")
-                        .foregroundColor(.purple)
+                    Image(systemName: "app.fill")
+                        .foregroundColor(.gray)
                 }
             }
 
@@ -313,12 +357,19 @@ struct PortfolioView: View {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.gray)
 
-                if let rule = topAppRule, let token = rule.applicationToken {
-                    Label(token)
-                        .labelStyle(.titleOnly)
-                        .font(.system(size: 16, weight: .black))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
+                if let rule = topAppRule {
+                    if let token = rule.applicationToken {
+                        Label(token)
+                            .labelStyle(.titleOnly)
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                    } else {
+                        Text(rule.appName)
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                    }
                 } else {
                     Text("None")
                         .font(.system(size: 24, weight: .black, design: .rounded))
@@ -330,6 +381,25 @@ struct PortfolioView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white.opacity(0.05).cornerRadius(24))
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.08), lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private func topAppIcon(for rule: Rule) -> some View {
+        if let token = rule.applicationToken {
+            Label(token)
+                .labelStyle(.iconOnly)
+                .scaleEffect(2.0)
+                .frame(width: 40, height: 40)
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.green.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                Text(rule.appInitial)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.green)
+            }
+        }
     }
 
     private func statWidget(icon: String, color: Color, label: String, value: String, unit: String? = nil) -> some View {
@@ -353,8 +423,8 @@ struct PortfolioView: View {
                         .foregroundColor(.white)
                     if let unit = unit {
                         Text(unit)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(color.opacity(0.8))
+                            .font(.system(size: 24, weight: .black, design: .rounded))
+                            .foregroundColor(.white)
                     }
                 }
             }
@@ -373,14 +443,13 @@ struct PortfolioView: View {
                     .foregroundColor(.white)
                 Spacer()
                 Button {
-                    withAnimation { showAllHoldings = true }
+                    forceRefreshPortfolio()
                 } label: {
-                    Text("See All")
+                    Image(systemName: "arrow.clockwise")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.green.opacity(0.1).cornerRadius(15))
+                        .foregroundColor(Color(white: 0.75))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 4)
                 }
             }
 
@@ -479,19 +548,22 @@ struct PortfolioView: View {
                     .font(.system(size: 19, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                 Spacer()
-                Button {
-                    withAnimation { showAllActivity = true }
-                } label: {
-                    Text("See All")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.green.opacity(0.1).cornerRadius(15))
+                if !recentActivityPreview.isEmpty {
+                    Button {
+                        viewModel.fetchPortfolio()
+                        withAnimation { showAllActivity = true }
+                    } label: {
+                        Text("See All")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.green)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.green.opacity(0.1).cornerRadius(15))
+                    }
                 }
             }
 
-            if viewModel.recentActivity.isEmpty {
+            if recentActivityPreview.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "clock.badge.exclamationmark")
                         .font(.system(size: 32))
@@ -510,7 +582,7 @@ struct PortfolioView: View {
                 .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.05), lineWidth: 1))
             } else {
                 VStack(spacing: 20) {
-                    ForEach(viewModel.recentActivity.first?.items.prefix(4) ?? []) { activity in
+                    ForEach(recentActivityPreview) { activity in
                         activityRow(activity)
                     }
                 }
@@ -521,34 +593,59 @@ struct PortfolioView: View {
 
     private func activityRow(_ activity: ActivityEntry) -> some View {
         HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(0.4))
-                    .frame(width: 44, height: 44)
-                Image(systemName: activity.icon)
-                    .foregroundColor(activity.iconColor)
-            }
+            activityLeadingIcon(activity)
             .shadow(color: .black.opacity(0.3), radius: 10)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(activity.title)
+                Text(activity.displayTitle)
                     .font(.system(size: 14, weight: .heavy))
                     .foregroundColor(.white)
-                Text(activity.description)
+                Text(activity.displayDescription)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.gray)
+                    .lineLimit(2)
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(activity.amount)
+                Text(activity.displayAmount)
                     .font(.system(size: 14, weight: .black, design: .rounded))
                     .foregroundColor(.white)
-                Text(activity.time)
+                Text(activity.displayTime)
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.gray)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func activityLeadingIcon(_ activity: ActivityEntry) -> some View {
+        if let ticker = activity.tickerSymbol {
+            AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(ticker)?format=png&size=200")) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                default:
+                    fallbackActivityIcon(activity)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        } else {
+            fallbackActivityIcon(activity)
+        }
+    }
+
+    private func fallbackActivityIcon(_ activity: ActivityEntry) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.black.opacity(0.4))
+                .frame(width: 44, height: 44)
+            Image(systemName: activity.icon)
+                .foregroundColor(activity.iconColor)
         }
     }
 
@@ -581,173 +678,6 @@ struct SparklineView: View {
     }
 }
 
-struct AllHoldingsView: View {
-    @Binding var isVisible: Bool
-    let holdings: [AssetHolding]
-    let onSelect: (AssetHolding) -> Void
-    @State private var searchText = ""
-
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            searchBar
-            assetList
-        }
-        .background(Color.black.ignoresSafeArea())
-    }
-
-    private var header: some View {
-        HStack(spacing: 16) {
-            Button {
-                withAnimation { isVisible = false }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
-                    .background(Color.white.opacity(0.05).cornerRadius(20))
-            }
-
-            Text("All Assets")
-                .font(.system(size: 24, weight: .black, design: .rounded))
-                .foregroundColor(.white)
-            Spacer()
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 10)
-        .padding(.bottom, 36)
-        .background(
-            VStack(spacing: 0) {
-                ZStack {
-                    Color.black.opacity(0.4)
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .white.opacity(0.04), location: 0),
-                                    .init(color: .clear, location: 1)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                }
-                ZStack {
-                    Rectangle()
-                        .fill(.clear)
-                        .background(.ultraThinMaterial)
-                        .mask(
-                            LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
-                        )
-                    LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
-                }
-                .frame(height: 30)
-            }
-            .padding(.top, -150)
-            .padding(.bottom, -30)
-        )
-    }
-
-    private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.gray)
-            TextField("Search your portfolio...", text: $searchText)
-                .foregroundColor(.white)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.05).cornerRadius(16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1), lineWidth: 1))
-        .padding(.horizontal, 24)
-        .padding(.bottom, 20)
-    }
-
-    private var assetList: some View {
-        ScrollView(showsIndicators: false) {
-            Group {
-                if holdings.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "briefcase")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray.opacity(0.5))
-                        Text("Portfolio Empty")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                        Text("You don't own any assets yet. Start tracking time to auto-invest.")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 80)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(holdings) { asset in
-                            Button {
-                                onSelect(asset)
-                            } label: {
-                                assetRow(asset)
-                            }
-                            if asset.id != holdings.last?.id {
-                                Divider().background(Color.white.opacity(0.05)).padding(.leading, 70)
-                            }
-                        }
-                    }
-                    .background(Color(white: 0.1).cornerRadius(18))
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
-        }
-    }
-
-    private func assetRow(_ asset: AssetHolding) -> some View {
-        HStack(spacing: 14) {
-            AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(asset.ticker)?format=png&size=200")) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fit)
-                default:
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                        Text(asset.appInitial)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                }
-            }
-            .frame(width: 48, height: 48)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(asset.ticker)
-                    .font(.system(size: 16, weight: .heavy))
-                    .foregroundColor(.white)
-                Text(asset.company)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.gray)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("$\(String(format: "%.2f", asset.value))")
-                    .font(.system(size: 16, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
-                Text("\(asset.isPositive ? "+" : "")\(String(format: "%.1f", asset.returnPct))%")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(asset.isPositive ? .green : .red)
-            }
-        }
-        .padding(16)
-    }
-}
-
 struct AllActivityView: View {
     @Binding var isVisible: Bool
     let activities: [ActivityGroup]
@@ -773,13 +703,13 @@ struct AllActivityView: View {
             }
 
             Text("Activity History")
-                .font(.system(size: 24, weight: .black, design: .rounded))
+                .font(.system(size: 32, weight: .black))
                 .foregroundColor(.white)
             Spacer()
         }
         .padding(.horizontal, 24)
-        .padding(.top, 10)
-        .padding(.bottom, 36)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
         .background(
             VStack(spacing: 0) {
                 ZStack {
@@ -861,33 +791,58 @@ struct AllActivityView: View {
 
     private func activityRow(_ activity: ActivityEntry) -> some View {
         HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(0.4))
-                    .frame(width: 44, height: 44)
-                Image(systemName: activity.icon)
-                    .foregroundColor(activity.iconColor)
-            }
+            activityLeadingIcon(activity)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(activity.title)
+                Text(activity.displayTitle)
                     .font(.system(size: 14, weight: .heavy))
                     .foregroundColor(.white)
-                Text(activity.description)
+                Text(activity.displayDescription)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.gray)
+                    .lineLimit(2)
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(activity.amount)
+                Text(activity.displayAmount)
                     .font(.system(size: 14, weight: .black, design: .rounded))
                     .foregroundColor(.white)
-                Text(activity.time)
+                Text(activity.displayTime)
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.gray)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func activityLeadingIcon(_ activity: ActivityEntry) -> some View {
+        if let ticker = activity.tickerSymbol {
+            AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(ticker)?format=png&size=200")) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                default:
+                    fallbackActivityIcon(activity)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        } else {
+            fallbackActivityIcon(activity)
+        }
+    }
+
+    private func fallbackActivityIcon(_ activity: ActivityEntry) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.black.opacity(0.4))
+                .frame(width: 44, height: 44)
+            Image(systemName: activity.icon)
+                .foregroundColor(activity.iconColor)
         }
     }
 }

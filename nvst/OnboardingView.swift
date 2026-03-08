@@ -11,7 +11,7 @@ import FamilyControls
 
 struct OnboardingView: View {
     @ObservedObject var manager: ScreenTimeManager
-    @Environment(\.dismiss) private var dismiss
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
     // 0 = Welcome, 1 = Track, 2 = Buy Stock, 3 = Permissions
     // 4 = Select App, 5 = Select Ticker, 6 = Investment Settings
@@ -28,7 +28,7 @@ struct OnboardingView: View {
     
     private let totalSteps = 7
     private let capOptions = [5.0, 10.0, 20.0, 50.0]
-    private let tickerSuggestions = ["META", "GOOGL", "AAPL", "TSLA", "SNAP", "AMZN", "NVDA", "MSFT"]
+    private let tickerSuggestions = ["META", "GOOGL", "AAPL", "DASH", "SNAP", "AMZN", "SPOT", "MSFT"]
     
     private var hasApp: Bool { !appSelection.applicationTokens.isEmpty }
     private var hasTicker: Bool { !tickerText.isEmpty }
@@ -199,7 +199,7 @@ struct OnboardingView: View {
                 .lineLimit(3)
                 .minimumScaleFactor(0.7)
             
-            Text("Every minute on social media automatically invests into your future.")
+            Text("Every minute on the apps you actually use invests into your future.")
                 .font(.system(size: 17, weight: .medium))
                 .foregroundColor(Color(hex: "8E8E93"))
                 .lineSpacing(4)
@@ -211,13 +211,13 @@ struct OnboardingView: View {
     
     private var slide2: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("We track\nyour apps.")
+            Text("You choose\nyour time.")
                 .font(.system(size: 46, weight: .black))
                 .foregroundColor(.white)
                 .lineLimit(3)
                 .minimumScaleFactor(0.7)
             
-            Text("Secure, local monitoring of your screen time. We know exactly how much time you spend — nothing leaves your device.")
+            Text("Every time you access an app, you set the amount of time you want to spend there.")
                 .font(.system(size: 17, weight: .medium))
                 .foregroundColor(Color(hex: "8E8E93"))
                 .lineSpacing(4)
@@ -245,7 +245,7 @@ struct OnboardingView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             
-            Text("Scroll Instagram for an hour? We automatically buy fractional shares of META with your money.")
+            Text("Scroll Instagram for an hour? We automatically buy fractional shares of META for you")
                 .font(.system(size: 17, weight: .medium))
                 .foregroundColor(Color(hex: "8E8E93"))
                 .lineSpacing(4)
@@ -304,11 +304,11 @@ struct OnboardingView: View {
                     .foregroundColor(.white)
                 Text("app.")
                     .font(.system(size: 46, weight: .black))
-                    .foregroundColor(.green)
+                    .foregroundColor(.white)
             }
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            
+
             Text("Choose the app you want to track. Every minute you spend on it will automatically invest into a stock.")
                 .font(.system(size: 17, weight: .medium))
                 .foregroundColor(Color(hex: "8E8E93"))
@@ -653,11 +653,12 @@ struct OnboardingView: View {
     private func finishOnboarding() {
         if hasApp && hasTicker,
            let token = appSelection.applicationTokens.first {
+            let ticker = tickerText.uppercased()
             let rule = Rule(
                 id: UUID().uuidString,
                 appName: "",
-                appInitial: "",
-                ticker: tickerText,
+                appInitial: String(ticker.prefix(1)),
+                ticker: ticker,
                 rate: investRate,
                 timeSpan: 1,
                 cap: dailyCap,
@@ -665,9 +666,56 @@ struct OnboardingView: View {
                 isActive: true,
                 applicationToken: token
             )
+
+            // Save rule to UserDefaults so it persists
+            var existing: [Rule] = []
+            if let data = UserDefaults.standard.data(forKey: "savedRules"),
+               let decoded = try? JSONDecoder().decode([Rule].self, from: data) {
+                existing = decoded
+            }
+            existing.append(rule)
+            if let encoded = try? JSONEncoder().encode(existing) {
+                UserDefaults.standard.set(encoded, forKey: "savedRules")
+            }
+
+            // Sync preference to backend
+            if let tokenData = try? JSONEncoder().encode(token) {
+                let encodedToken = tokenData.base64EncodedString()
+                savePreferenceToBackend(appName: encodedToken, ticker: ticker)
+            }
+
+            // Apply shields so the app gets blocked/tracked
+            var selection = FamilyActivitySelection()
+            for r in existing where r.isActive {
+                if let t = r.applicationToken {
+                    selection.applicationTokens.insert(t)
+                }
+            }
+            manager.selection = selection
+
             NotificationCenter.default.post(name: .onboardingRuleCreated, object: rule)
         }
-        dismiss()
+        hasCompletedOnboarding = true
+    }
+
+    private func savePreferenceToBackend(appName: String, ticker: String) {
+        guard let url = URL(string: "http://149.125.202.134:8000/api/preferences") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "app_name": appName,
+            "investment_rate_per_hour": investRate * 60,
+            "ticker": ticker
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { _, _, error in
+            if let error = error {
+                print("Failed to save onboarding preference: \(error)")
+            }
+        }.resume()
     }
 }
 

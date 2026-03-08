@@ -67,6 +67,56 @@ struct ActivityEntry: Identifiable, Codable {
         default: return .gray
         }
     }
+
+    var displayTitle: String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Activity" }
+
+        if trimmed.localizedCaseInsensitiveContains("Auto-Invest") {
+            return trimmed.replacingOccurrences(of: "Auto-Invest", with: "Invested")
+        }
+        return trimmed
+    }
+
+    var tickerSymbol: String? {
+        let source = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else { return nil }
+        let words = source.split(whereSeparator: \.isWhitespace)
+        guard let last = words.last else { return nil }
+        let cleaned = last.trimmingCharacters(in: .punctuationCharacters).uppercased()
+        guard cleaned.count >= 1, cleaned.count <= 6, cleaned.allSatisfy({ $0.isLetter || $0.isNumber }) else {
+            return nil
+        }
+        return cleaned
+    }
+
+    var displayDescription: String {
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "Automated investment" }
+        if trimmed.contains("{") && trimmed.contains("}") {
+            return "Automated investment"
+        }
+
+        let words = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
+        let cleanedWords = words.map { word -> String in
+            let token = word.trimmingCharacters(in: .punctuationCharacters)
+            let isLikelyEncodedToken = token.count >= 24 && token.allSatisfy { $0.isLetter || $0.isNumber }
+            return isLikelyEncodedToken ? "tracked app" : word
+        }
+
+        let cleaned = cleanedWords.joined(separator: " ")
+        return cleaned.replacingOccurrences(of: "tracked app tracked app", with: "tracked app")
+    }
+
+    var displayAmount: String {
+        let trimmed = amount.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "--" : trimmed
+    }
+
+    var displayTime: String {
+        let trimmed = time.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Now" : trimmed
+    }
 }
 
 struct ActivityGroup: Identifiable, Codable {
@@ -145,6 +195,26 @@ class PortfolioViewModel: ObservableObject {
     @Published var recentActivity: [ActivityGroup] = []
     @Published var pendingValue: Double = 0.0
     @Published var pendingOrders: [PendingOrder] = []
+    
+    private static let cacheKey = "portfolioViewModelCache"
+    
+    private struct PortfolioCacheSnapshot: Codable {
+        let portfolioValue: Double
+        let totalAutoInvestedString: String
+        let totalGainString: String
+        let totalTimeString: String
+        let totalConvertedHrs: Double
+        let topEngine: String
+        let holdings: [AssetHolding]
+        let recentActivity: [ActivityGroup]
+        let pendingValue: Double
+        let pendingOrders: [PendingOrder]
+        let historicalEquity: [Double]
+    }
+
+    init() {
+        loadCachedSnapshot()
+    }
 
     var holdingsTotal: Double {
         holdings.reduce(0) { $0 + $1.value }
@@ -192,11 +262,11 @@ class PortfolioViewModel: ObservableObject {
                     self?.pendingValue = decoded.pending_value ?? 0.0
                     self?.pendingOrders = decoded.pending_orders ?? []
 
-                    // Merge pending orders into holdings
+                    // Merge pending orders into holdings for visibility
                     for order in decoded.pending_orders ?? [] {
                         let symbol = order.symbol
                         if let idx = allHoldings.firstIndex(where: { $0.ticker == symbol }) {
-                            // Holding exists — add pending value and mark pending
+                            // Mark as pending as result of tx
                             let existing = allHoldings[idx]
                             allHoldings[idx] = AssetHolding(
                                 id: existing.id,
@@ -238,6 +308,7 @@ class PortfolioViewModel: ObservableObject {
 
                     self?.holdings = allHoldings
                     self?.recentActivity = decoded.activities
+                    self?.saveCachedSnapshot()
                 }
             } catch {
                 print("Failed to decode portfolio: \(error)")
@@ -256,12 +327,49 @@ class PortfolioViewModel: ObservableObject {
             do {
                 let decoded = try JSONDecoder().decode(PortfolioHistoryResponse.self, from: data)
                 DispatchQueue.main.async {
-                    self?.historicalEquity = decoded.equity.compactMap { $0 }
+                    self?.historicalEquity = decoded.equity.compactMap { value in
+                        guard let value, value.isFinite else { return nil }
+                        return value
+                    }
+                    self?.saveCachedSnapshot()
                 }
             } catch {
                 print("Failed to decode history: \(error)")
             }
         }.resume()
     }
-}
 
+    private func loadCachedSnapshot() {
+        guard let data = UserDefaults.standard.data(forKey: Self.cacheKey),
+              let snapshot = try? JSONDecoder().decode(PortfolioCacheSnapshot.self, from: data) else { return }
+        portfolioValue = snapshot.portfolioValue
+        totalAutoInvestedString = snapshot.totalAutoInvestedString
+        totalGainString = snapshot.totalGainString
+        totalTimeString = snapshot.totalTimeString
+        totalConvertedHrs = snapshot.totalConvertedHrs
+        topEngine = snapshot.topEngine
+        holdings = snapshot.holdings
+        recentActivity = snapshot.recentActivity
+        pendingValue = snapshot.pendingValue
+        pendingOrders = snapshot.pendingOrders
+        historicalEquity = snapshot.historicalEquity
+    }
+
+    private func saveCachedSnapshot() {
+        let snapshot = PortfolioCacheSnapshot(
+            portfolioValue: portfolioValue,
+            totalAutoInvestedString: totalAutoInvestedString,
+            totalGainString: totalGainString,
+            totalTimeString: totalTimeString,
+            totalConvertedHrs: totalConvertedHrs,
+            topEngine: topEngine,
+            holdings: holdings,
+            recentActivity: recentActivity,
+            pendingValue: pendingValue,
+            pendingOrders: pendingOrders,
+            historicalEquity: historicalEquity
+        )
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: Self.cacheKey)
+    }
+}

@@ -14,8 +14,11 @@ struct TimeSelectionView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMinutes = 15
     @State private var didUnlock = false
+    @State private var isProcessing = false
+    @State private var isCompleted = false
     @State private var orderStatus: String? = nil
-    private let minimumMinutes = 5
+    @State private var stockPrice: Double? = nil
+    private let minimumMinutes = 1
     private let maximumMinutes = 180
     private let minuteStep = 1
     private let rulesKey = "savedRules"
@@ -32,118 +35,229 @@ struct TimeSelectionView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color(white: 0.1).ignoresSafeArea()
 
-            VStack(spacing: 28) {
-                Text("How much time?")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .padding(.top, 20)
+            if isProcessing || isCompleted {
+                completionView
+            } else {
+                selectionView
+            }
+        }
+        .onAppear {
+            if let rule = matchedRule, !rule.ticker.isEmpty {
+                fetchPrice(ticker: rule.ticker)
+            }
+        }
+    }
 
-                // Dynamic time picker
-                HStack(spacing: 16) {
-                    Button {
-                        selectedMinutes = max(minimumMinutes, selectedMinutes - minuteStep)
-                    } label: {
-                        Image(systemName: "minus")
-                            .font(.title3.weight(.bold))
-                            .foregroundColor(.white)
-                            .frame(width: 50, height: 50)
-                            .background(
-                                Circle()
-                                    .fill(Color(white: 0.12))
-                            )
-                    }
-                    .disabled(selectedMinutes <= minimumMinutes)
+    private var selectionView: some View {
+        VStack(spacing: 28) {
+            Text("Select your time")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .padding(.top, 70)
 
-                    VStack(spacing: 4) {
+            // Dynamic time picker
+            HStack(spacing: 16) {
+                Button {
+                    selectedMinutes = max(minimumMinutes, selectedMinutes - minuteStep)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.title3.weight(.bold))
+                        .foregroundColor(.white)
+                        .frame(width: 50, height: 50)
+                        .background(
+                            Circle()
+                                .fill(Color(white: 0.12))
+                        )
+                }
+                .disabled(selectedMinutes <= minimumMinutes)
+
+                VStack(spacing: 4) {
+                    Text(formattedDuration(selectedMinutes))
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(white: 0.1))
+                )
+
+                Button {
+                    selectedMinutes = min(maximumMinutes, selectedMinutes + minuteStep)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.title3.weight(.bold))
+                        .foregroundColor(.white)
+                        .frame(width: 50, height: 50)
+                        .background(
+                            Circle()
+                                .fill(Color(white: 0.12))
+                        )
+                }
+                .disabled(selectedMinutes >= maximumMinutes)
+            }
+
+            // App → Stock connection
+            if let rule = matchedRule, !rule.ticker.isEmpty {
+                HStack(spacing: 0) {
+                    // Left: App icon + time + name
+                    VStack(spacing: 8) {
+                        if let token = rule.applicationToken {
+                            Label(token)
+                                .labelStyle(.iconOnly)
+                                .scaleEffect(3.7)
+                                .frame(width: 80, height: 80)
+                                .clipShape(RoundedRectangle(cornerRadius: 20))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                                )
+                        } else {
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color(white: 0.15))
+                                .frame(width: 80, height: 80)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                                )
+                        }
+
                         Text(formattedDuration(selectedMinutes))
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .font(.system(size: 22, weight: .black, design: .rounded))
                             .foregroundColor(.white)
+
+                        if let token = rule.applicationToken {
+                            Label(token)
+                                .labelStyle(.titleOnly)
+                                .foregroundColor(.gray)
+                                .opacity(0.6)
+                                .scaleEffect(0.8)
+                                .lineLimit(1)
+                                .padding(.top, -6)
+                        }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(white: 0.1))
-                    )
 
-                    Button {
-                        selectedMinutes = min(maximumMinutes, selectedMinutes + minuteStep)
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.title3.weight(.bold))
-                            .foregroundColor(.white)
-                            .frame(width: 50, height: 50)
-                            .background(
-                                Circle()
-                                    .fill(Color(white: 0.12))
-                            )
-                    }
-                    .disabled(selectedMinutes >= maximumMinutes)
-                }
+                    // Arrow
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Color(white: 0.35))
+                        .padding(.horizontal, 4)
 
-                // Stock info
-                if let rule = matchedRule, !rule.ticker.isEmpty {
-                    VStack(spacing: 12) {
+                    // Right: Stock logo + amount + ticker
+                    VStack(spacing: 8) {
                         AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(rule.ticker)?format=png&size=200")) { phase in
                             switch phase {
                             case .success(let image):
                                 image.resizable().aspectRatio(contentMode: .fit)
                             default:
-                                RoundedRectangle(cornerRadius: 24)
+                                RoundedRectangle(cornerRadius: 20)
                                     .fill(Color(white: 0.15))
                                     .overlay(
                                         Text(rule.ticker)
-                                            .font(.system(size: 28, weight: .bold))
+                                            .font(.system(size: 22, weight: .bold))
                                             .foregroundColor(.white)
                                     )
                             }
                         }
-                        .frame(width: 100, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                        .frame(width: 80, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 24)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
                         )
 
                         Text("$\(investmentAmount, specifier: "%.2f")")
-                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                            .font(.system(size: 22, weight: .black, design: .rounded))
                             .foregroundColor(.green)
 
-                        Text("\(String(format: "%.2f", investmentAmount / 100.0)) shares")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(Color(red: 0.2, green: 0.6, blue: 0.2))
+                        Text(rule.ticker)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.gray)
+                            .padding(.top, -4)
                     }
+                    .frame(maxWidth: .infinity)
                 }
+                .padding(.vertical, 16)
 
-                Spacer()
-
-                if exceedsLimit {
-                    Text("Exceeds daily limit ($\(String(format: "%.0f", TradingLimits.dailyLimit))). $\(String(format: "%.2f", TradingLimits.remaining)) remaining.")
-                        .font(.caption)
-                        .foregroundColor(.red)
+                if let shares = estimatedShares, let price = stockPrice {
+                    Text("\(shares, specifier: "%.3f") shares @ $\(price, specifier: "%.2f")")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
                         .multilineTextAlignment(.center)
+                        .padding(.top, -4)
                 }
-
-                // Unlock button
-                Button {
-                    unlock()
-                } label: {
-                    Text(didUnlock ? "Unlocked!" : (exceedsLimit ? "Over Daily Limit" : "Invest & Unlock"))
-                        .font(.headline)
-                        .foregroundColor(exceedsLimit ? .white : .black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 54)
-                        .background(
-                            Capsule().fill(didUnlock ? Color(white: 0.2) : (exceedsLimit ? Color(white: 0.2) : .green))
-                        )
-                }
-                .disabled(didUnlock || exceedsLimit)
-                .padding(.bottom, 20)
             }
-            .padding(.horizontal, 24)
+
+            Spacer()
+
+            if exceedsLimit {
+                Text("Exceeds daily limit ($\(String(format: "%.0f", TradingLimits.dailyLimit))). $\(String(format: "%.2f", TradingLimits.remaining)) remaining.")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+            }
+
+            // Unlock button
+            Button {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isProcessing = true
+                }
+                unlock()
+            } label: {
+                Text(exceedsLimit ? "Over Daily Limit" : "Invest & Unlock")
+                    .font(.headline)
+                    .foregroundColor(exceedsLimit ? .white : .black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(
+                        Capsule().fill(exceedsLimit ? Color(white: 0.2) : .green)
+                    )
+            }
+            .disabled(exceedsLimit)
+            .padding(.bottom, 20)
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private var completionView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+
+            if isCompleted {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundColor(.green)
+                    .transition(.scale.combined(with: .opacity))
+
+                Text("Completed")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
+
+                if let rule = matchedRule {
+                    let sharesText = estimatedShares.map { String(format: "%.3f", $0) } ?? ""
+                    Text("Your purchase of \(sharesText) \(rule.ticker) has been completed and your app has been unlocked")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+            } else {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(.white)
+
+                Text("Processing...")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(.top, 8)
+            }
+
+            Spacer()
         }
     }
 
@@ -153,6 +267,23 @@ struct TimeSelectionView: View {
 
     private var exceedsLimit: Bool {
         investmentAmount > TradingLimits.remaining
+    }
+
+    private var estimatedShares: Double? {
+        guard let price = stockPrice, price > 0 else { return nil }
+        return investmentAmount / price
+    }
+
+    private func fetchPrice(ticker: String) {
+        guard let url = URL(string: "http://149.125.202.134:8000/api/price/\(ticker)") else { return }
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let price = json["price"] as? Double else { return }
+            DispatchQueue.main.async {
+                stockPrice = price
+            }
+        }.resume()
     }
 
     private func formattedDuration(_ minutes: Int) -> String {
@@ -172,10 +303,15 @@ struct TimeSelectionView: View {
         submitTrackUsage(minutes: Double(selectedMinutes))
 
         // Notify home page to refresh
-        NotificationCenter.default.post(name: .usageRecorded, object: nil)
+        NotificationCenter.default.post(name: Notification.Name("com.nvst.usageRecorded"), object: nil)
 
-        // Auto-dismiss after a beat
+        // Show processing, then completed, then dismiss
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isCompleted = true
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
             dismiss()
         }
     }

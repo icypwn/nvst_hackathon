@@ -28,6 +28,7 @@ extension Color {
 
 struct SettingsView: View {
     @State private var showLogoutModal = false
+    @AppStorage("tabSwitchHapticsEnabled") private var tabSwitchHapticsEnabled = true
     
     var body: some View {
         NavigationStack {
@@ -47,7 +48,7 @@ struct SettingsView: View {
                                 SettingsRow(icon: "bell.fill", color: Color(hex: "FF3B30"), title: "Notifications")
                             }
                             Divider().background(Color.white.opacity(0.05)).padding(.leading, 54)
-                            SettingsRow(icon: "iphone.radiowaves.left.and.right", color: Color(hex: "5E5CE6"), title: "Haptic Feedback", value: "On", showChevron: true)
+                            ToggleRow(title: "Tab Switch Haptics", isOn: $tabSwitchHapticsEnabled)
                         }
 
                         SectionLabel("FINANCIAL")
@@ -96,7 +97,7 @@ struct SettingsView: View {
                             }
                         }
                         
-                        Text("nvst v2.4.0 (102)")
+                        Text("nvst 1.0")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Color(hex: "8E8E93"))
                             .padding(.top, 6)

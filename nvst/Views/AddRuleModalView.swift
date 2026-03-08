@@ -263,7 +263,7 @@ struct AddRuleModalView: View {
         .background(Color(white: 0.1))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.06), lineWidth: 1))
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .transition(.opacity)
     }
 
     private var configBox: some View {
