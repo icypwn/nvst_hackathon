@@ -1,14 +1,13 @@
-# main.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, List
 from fastapi.middleware.cors import CORSMiddleware
 
+from datetime import datetime
 import trading
 
 app = FastAPI(title="NVST Hackathon Backend")
 
-# Allow CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,13 +16,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory storage for user preferences and live usage tracking
 user_preferences = {
     "apps": {}
 }
 
-# Starts from scratch
 user_usage_stats = {}
+user_activity_log = []
 
 def format_time_string(minutes: float) -> str:
     hours = int(minutes // 60)
@@ -60,7 +58,7 @@ def get_portfolio():
         total_auto_invested = 0.0
         total_current_value = 0.0
         total_minutes = 0.0
-        shares = []
+        holdings = []
         
         for app_name, stats in user_usage_stats.items():
             inv_amount = stats["invested_amount"]
@@ -72,12 +70,15 @@ def get_portfolio():
             
             current_value = inv_amount
             shares_qty = 0.0
+            avg_price = 1.0
             
-            # Match with real Alpaca data if available to show real gains
             if ticker in alpaca_pos:
                 pos = alpaca_pos[ticker]
-                avg_price = float(pos.avg_entry_price) if pos.avg_entry_price else 1.0
-                current_price = float(pos.current_price) if pos.current_price else 1.0
+                avg_price_str = getattr(pos, 'avg_entry_price', None)
+                current_price_str = getattr(pos, 'current_price', None)
+                
+                avg_price = float(avg_price_str) if avg_price_str else 1.0
+                current_price = float(current_price_str) if current_price_str else 1.0
                 
                 if avg_price > 0:
                     gain_pct = (current_price - avg_price) / avg_price
@@ -85,44 +86,70 @@ def get_portfolio():
                     
                 shares_qty = current_value / current_price if current_price > 0 else 0.0
             else:
-                # Fallback purely for hackathon UI visual completeness if market is closed
                 shares_qty = inv_amount / 150.0 
-                # Add a tiny fake gain for visual parity with the mock data if not traded yet
                 current_value = inv_amount * 1.05 
                 
-            gain = current_value - inv_amount
+            return_pct = ((current_value - inv_amount) / inv_amount) * 100.0 if inv_amount > 0 else 0.0
             total_current_value += current_value
             
             display_name = "X" if app_name.lower() == "twitter" else app_name.capitalize()
             
-            shares.append({
-                "name": display_name,
-                "iconLetter": display_name[0].upper() if display_name else "A",
-                "timeString": format_time_string(mins),
-                "gainAmount": format_gain_string(gain),
-                "stockTicker": f"{shares_qty:.4f} {ticker}",
-                "percentage": 0.0 # Will calculate next
+            pref = user_preferences["apps"].get(app_name.lower())
+            rate_per_hour = pref["rate_per_hour"] if pref else 0.0
+            
+            holdings.append({
+                "id": app_name.lower(),
+                "ticker": ticker,
+                "company": display_name,
+                "initial": display_name[0].upper() if display_name else "A",
+                "iconClass": f"icon-{app_name.lower()}",
+                "value": current_value,
+                "returnPct": return_pct,
+                "shares": shares_qty,
+                "avgCost": avg_price,
+                "totalInvested": inv_amount,
+                "rate": f"${rate_per_hour:.2f} / hr",
+                "sparklineData": [0, 0]
             })
 
-        # Calculate percentages mathematically
         total_gain = total_current_value - total_auto_invested
+        total_converted_hrs = total_minutes / 60.0
+        
+        top_engine = "None"
+        max_invested = -1.0
         
         if total_auto_invested > 0:
-            for s in shares:
-                # Re-find the invested amount to determine weight
-                app_key = s["name"].lower()
-                if app_key == "x": app_key = "twitter"
-                inv = user_usage_stats[app_key]["invested_amount"]
-                s["percentage"] = round(inv / total_auto_invested, 2)
+            for s in holdings:
+                inv = s["totalInvested"]
                 
-        # Sort so highest percentage is first, matching typical portfolio views
-        shares.sort(key=lambda x: x["percentage"], reverse=True)
+                if inv > max_invested:
+                    max_invested = inv
+                    top_engine = s["company"]
+                
+        holdings.sort(key=lambda x: x["value"], reverse=True)
+        
+        grouped_activities = {}
+        for entry in user_activity_log:
+            d_str = entry["date_str"]
+            if d_str not in grouped_activities:
+                grouped_activities[d_str] = []
+            grouped_activities[d_str].append(entry)
+            
+        activities_list = []
+        for d_str, items in grouped_activities.items():
+            activities_list.append({
+                "group": d_str,
+                "items": items
+            })
             
         return {
             "total_auto_invested_string": f"${total_auto_invested:.2f}",
             "total_gain_string": format_gain_string(total_gain),
             "total_time_string": format_time_string(total_minutes),
-            "shares": shares,
+            "total_converted_hrs": round(total_converted_hrs, 1),
+            "top_engine": top_engine,
+            "holdings": holdings,
+            "activities": activities_list,
             "raw_alpaca_data": {
                 "portfolio_value": float(account.portfolio_value),
                 "buying_power": float(account.buying_power),
@@ -133,11 +160,29 @@ def get_portfolio():
          raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/history")
+def get_history(period: str = "1M"):
+    try:
+        history = trading.get_portfolio_history(period)
+        equity = history.equity
+        timestamp = history.timestamp
+        
+        if not equity:
+            equity = [0.0, 0.0]
+            timestamp = [0, 1]
+            
+        return {
+            "equity": equity,
+            "timestamp": timestamp,
+            "base_value": history.base_value
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/track-usage")
 def track_usage(data: UsageData):
     app_name_lower = data.app_name.lower()
     
-    # Check if the user has a preference set for this app
     pref = user_preferences["apps"].get(app_name_lower)
     
     if not pref:
@@ -146,12 +191,10 @@ def track_usage(data: UsageData):
     rate_per_hour = pref["rate_per_hour"]
     ticker = pref["ticker"]
         
-    # Calculate amount to invest
     hours_used = data.usage_minutes / 60.0
     investment_amount = hours_used * rate_per_hour
     investment_amount = round(investment_amount, 2)
     
-    # Update our local state to perfectly reflect the new usage in the UI
     if app_name_lower not in user_usage_stats:
         user_usage_stats[app_name_lower] = {"time_minutes": 0, "invested_amount": 0.0, "ticker": ticker}
         
@@ -165,6 +208,26 @@ def track_usage(data: UsageData):
     result = trading.buy_fractional_share(ticker, investment_amount)
     
     if result["success"]:
+         now = datetime.now()
+         time_str = now.strftime("%I:%M %p")
+         if d_str := now.strftime("%Y-%m-%d") == datetime.now().strftime("%Y-%m-%d"):
+             display_date = "Today"
+         else:
+             display_date = now.strftime("%b %d")
+             
+         display_app = "X" if app_name_lower == "twitter" else data.app_name.capitalize()
+             
+         user_activity_log.insert(0, {
+             "id": result["order_id"] or str(now.timestamp()),
+             "title": f"Auto-Invest {ticker.upper()}",
+             "description": f"From {int(data.usage_minutes)}m {display_app}",
+             "amount": f"+${investment_amount:.2f}",
+             "time": time_str,
+             "icon": "zap",
+             "color": "green",
+             "date_str": display_date
+         })
+         
          return {
              "status": "success", 
              "action": "buy order submitted", 
@@ -191,4 +254,8 @@ def update_preference(pref: PreferenceData):
     }
     
     return {"status": "success", "preferences": user_preferences["apps"]}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 

@@ -7,7 +7,9 @@ struct PortfolioView: View {
     @State private var selectedAsset: AssetHolding?
     @Namespace private var portfolioAnimation
     
-    let timeRanges = ["1D", "1W", "1M", "3M", "1Y"]
+    @StateObject private var viewModel = PortfolioViewModel()
+    
+    let timeRanges = ["1D", "1W", "1M"]
     
     var body: some View {
         ZStack {
@@ -30,7 +32,7 @@ struct PortfolioView: View {
             }
             
             if showAllHoldings {
-                AllHoldingsView(isVisible: $showAllHoldings, onSelect: { asset in
+                AllHoldingsView(isVisible: $showAllHoldings, holdings: viewModel.holdings, onSelect: { asset in
                     selectedAsset = asset
                 })
                 .transition(.move(edge: .trailing))
@@ -38,7 +40,7 @@ struct PortfolioView: View {
             }
             
             if showAllActivity {
-                AllActivityView(isVisible: $showAllActivity)
+                AllActivityView(isVisible: $showAllActivity, activities: viewModel.recentActivity)
                 .transition(.move(edge: .trailing))
                 .zIndex(20)
             }
@@ -46,9 +48,11 @@ struct PortfolioView: View {
         .sheet(item: $selectedAsset) { asset in
             PortfolioDetailView(asset: asset)
         }
+        .onAppear {
+            viewModel.fetchPortfolio()
+            viewModel.fetchHistory(period: timeRanges[selectedTimeRange])
+        }
     }
-    
-    // MARK: - Sections
     
     private var stickyHeader: some View {
         HStack {
@@ -86,14 +90,14 @@ struct PortfolioView: View {
                 .foregroundColor(.gray)
                 .tracking(1.2)
             
-            Text("$1,428.50")
+            Text(viewModel.portfolioValue == 0 ? "$0.00" : viewModel.formattedPortfolioValue)
                 .font(.system(size: 44, weight: .black, design: .rounded))
                 .foregroundColor(.white)
             
             HStack(spacing: 6) {
                 Image(systemName: "trending.up")
                     .font(.system(size: 14, weight: .bold))
-                Text("+$124.20 (9.5%)")
+                Text(viewModel.totalGainString)
                     .font(.system(size: 13, weight: .bold))
             }
             .foregroundColor(Color(red: 0.19, green: 0.82, blue: 0.35))
@@ -112,29 +116,61 @@ struct PortfolioView: View {
     private var chartSection: some View {
         GeometryReader { geo in
             ZStack {
-                // Main Chart Line
-                Path { path in
-                    path.move(to: CGPoint(x: 0, y: 150))
-                    path.addCurve(to: CGPoint(x: geo.size.width, y: 50),
-                                 control1: CGPoint(x: geo.size.width * 0.375, y: 150),
-                                 control2: CGPoint(x: geo.size.width * 0.625, y: 50))
-                }
-                .stroke(Color(red: 0.19, green: 0.82, blue: 0.35), lineWidth: 3)
-                
-                // Area Under Chart
-                LinearGradient(colors: [Color(red: 0.19, green: 0.82, blue: 0.35).opacity(0.4), .clear],
-                               startPoint: .top, endPoint: .bottom)
-                .mask(
+                if !viewModel.historicalEquity.isEmpty {
+                    let minVal = viewModel.historicalEquity.min() ?? 0
+                    let maxVal = viewModel.historicalEquity.max() ?? (minVal + 1)
+                    let range = max(maxVal - minVal, 1.0)
+                    let stepX = geo.size.width / CGFloat(max(viewModel.historicalEquity.count - 1, 1))
+                    
                     Path { path in
-                        path.move(to: CGPoint(x: 0, y: 150))
-                        path.addCurve(to: CGPoint(x: geo.size.width, y: 50),
-                                     control1: CGPoint(x: geo.size.width * 0.375, y: 150),
-                                     control2: CGPoint(x: geo.size.width * 0.625, y: 50))
-                        path.addLine(to: CGPoint(x: geo.size.width, y: 220))
-                        path.addLine(to: CGPoint(x: 0, y: 220))
-                        path.closeSubpath()
+                        for (index, value) in viewModel.historicalEquity.enumerated() {
+                            let x = CGFloat(index) * stepX
+                            let y = geo.size.height - CGFloat((value - minVal) / range) * geo.size.height
+                            
+                            if index == 0 {
+                                path.move(to: CGPoint(x: x, y: y))
+                            } else {
+                                path.addLine(to: CGPoint(x: x, y: y))
+                            }
+                        }
+                        
+                        if viewModel.historicalEquity.count == 1 {
+                            path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
+                        }
                     }
-                )
+                    .stroke(Color(red: 0.19, green: 0.82, blue: 0.35), lineWidth: 3)
+                    
+                    LinearGradient(colors: [Color(red: 0.19, green: 0.82, blue: 0.35).opacity(0.4), .clear],
+                                   startPoint: .top, endPoint: .bottom)
+                    .mask(
+                        Path { path in
+                            for (index, value) in viewModel.historicalEquity.enumerated() {
+                                let x = CGFloat(index) * stepX
+                                let y = geo.size.height - CGFloat((value - minVal) / range) * geo.size.height
+                                
+                                if index == 0 {
+                                    path.move(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                            
+                            if viewModel.historicalEquity.count == 1 {
+                                path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
+                            }
+                            
+                            path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height))
+                            path.addLine(to: CGPoint(x: 0, y: geo.size.height))
+                            path.closeSubpath()
+                        }
+                    )
+                } else {
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: geo.size.height / 2))
+                        path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
+                    }
+                    .stroke(Color.gray.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [5]))
+                }
             }
         }
         .frame(height: 220)
@@ -147,6 +183,7 @@ struct PortfolioView: View {
                 Button {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                         selectedTimeRange = index
+                        viewModel.fetchHistory(period: timeRanges[index])
                     }
                 } label: {
                     Text(timeRanges[index])
@@ -176,8 +213,8 @@ struct PortfolioView: View {
     
     private var statWidgetsSection: some View {
         HStack(spacing: 16) {
-            statWidget(icon: "clock.arrow.2.circlepath", color: .blue, label: "Converted", value: "142.5", unit: "HRS", progress: 0.75)
-            statWidget(icon: "flame.fill", color: .purple, label: "Top Engine", value: "TikTok", badge: "Hot")
+            statWidget(icon: "clock.arrow.2.circlepath", color: .blue, label: "Converted", value: String(format: "%.1f", viewModel.totalConvertedHrs), unit: "HRS", progress: 0.75)
+            statWidget(icon: "flame.fill", color: .purple, label: "Top Engine", value: viewModel.topEngine, badge: "Hot")
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 32)
@@ -255,15 +292,35 @@ struct PortfolioView: View {
                 }
             }
             
-            VStack(spacing: 0) {
-                ForEach(PortfolioData.holdings.prefix(4)) { asset in
-                    assetRow(asset)
-                    if asset.id != PortfolioData.holdings.prefix(4).last?.id {
-                        Divider().background(Color.white.opacity(0.05)).padding(.leading, 70)
+            if viewModel.holdings.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "briefcase")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray)
+                    Text("No Holdings")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("Time tracked on your apps will be invested into fractional shares here.")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
+                .background(Color.white.opacity(0.03).cornerRadius(20))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.05), lineWidth: 1))
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(viewModel.holdings.prefix(4)) { asset in
+                        assetRow(asset)
+                        if asset.id != viewModel.holdings.prefix(4).last?.id {
+                            Divider().background(Color.white.opacity(0.05)).padding(.leading, 70)
+                        }
                     }
                 }
+                .glassEffect(GlassMaterial.regular, in: RoundedRectangle(cornerRadius: 28))
             }
-            .glassEffect(GlassMaterial.regular, in: RoundedRectangle(cornerRadius: 28))
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 40)
@@ -294,7 +351,6 @@ struct PortfolioView: View {
                 
                 Spacer()
                 
-                // Sparkline placeholder
                 SparklineView(data: asset.sparklineData, color: asset.isPositive ? .green : .red)
                     .frame(width: 56, height: 32)
                     .opacity(0.6)
@@ -333,9 +389,28 @@ struct PortfolioView: View {
                 }
             }
             
-            VStack(spacing: 20) {
-                ForEach(PortfolioData.activities.first?.items.prefix(4) ?? []) { activity in
-                    activityRow(activity)
+            if viewModel.recentActivity.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "clock.badge.exclamationmark")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray)
+                    Text("No Recent Activity")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("Your automated investments will appear here.")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
+                .background(Color.white.opacity(0.03).cornerRadius(20))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.05), lineWidth: 1))
+            } else {
+                VStack(spacing: 20) {
+                    ForEach(viewModel.recentActivity.first?.items.prefix(4) ?? []) { activity in
+                        activityRow(activity)
+                    }
                 }
             }
         }
@@ -349,7 +424,7 @@ struct PortfolioView: View {
                     .fill(Color.black.opacity(0.4))
                     .frame(width: 44, height: 44)
                 Image(systemName: activity.icon)
-                    .foregroundColor(activity.color)
+                    .foregroundColor(activity.iconColor)
             }
             .shadow(color: .black.opacity(0.3), radius: 10)
             
@@ -403,10 +478,9 @@ struct SparklineView: View {
     }
 }
 
-// MARK: - Subviews
-
 struct AllHoldingsView: View {
     @Binding var isVisible: Bool
+    let holdings: [AssetHolding]
     let onSelect: (AssetHolding) -> Void
     @State private var searchText = ""
     
@@ -475,19 +549,39 @@ struct AllHoldingsView: View {
     
     private var assetList: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                ForEach(PortfolioData.holdings) { asset in
-                    Button {
-                        onSelect(asset)
-                    } label: {
-                        assetRow(asset)
+            Group {
+                if holdings.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "briefcase")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray.opacity(0.5))
+                        Text("Portfolio Empty")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("You don't own any assets yet. Start tracking time to auto-invest.")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
                     }
-                    if asset.id != PortfolioData.holdings.last?.id {
-                        Divider().background(Color.white.opacity(0.05)).padding(.leading, 70)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 80)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(holdings) { asset in
+                            Button {
+                                onSelect(asset)
+                            } label: {
+                                assetRow(asset)
+                            }
+                            if asset.id != holdings.last?.id {
+                                Divider().background(Color.white.opacity(0.05)).padding(.leading, 70)
+                            }
+                        }
                     }
+                    .glassEffect(GlassMaterial.regular, in: RoundedRectangle(cornerRadius: 28))
                 }
             }
-            .glassEffect(GlassMaterial.regular, in: RoundedRectangle(cornerRadius: 28))
             .padding(.horizontal, 24)
             .padding(.bottom, 40)
         }
@@ -536,6 +630,7 @@ struct AllHoldingsView: View {
 
 struct AllActivityView: View {
     @Binding var isVisible: Bool
+    let activities: [ActivityGroup]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -587,22 +682,40 @@ struct AllActivityView: View {
     private var activityFeed: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 32) {
-                ForEach(PortfolioData.activities) { group in
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(group.group.uppercased())
-                            .font(.system(size: 12, weight: .bold))
+                if activities.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "tray")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray.opacity(0.5))
+                        Text("No Activity Yet")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("Start using your tracked apps to automatically invest your time into fractional shares.")
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
-                            .tracking(1.5)
-                            .padding(.leading, 4)
-                        
-                        VStack(spacing: 24) {
-                            ForEach(group.items) { activity in
-                                activityRow(activity)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 80)
+                } else {
+                    ForEach(activities) { group in
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(group.group.uppercased())
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.gray)
+                                .tracking(1.5)
+                                .padding(.leading, 4)
+                            
+                            VStack(spacing: 24) {
+                                ForEach(group.items) { activity in
+                                    activityRow(activity)
+                                }
                             }
+                            .padding(20)
+                            .background(Color.white.opacity(0.03).cornerRadius(28))
+                            .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.05), lineWidth: 1))
                         }
-                        .padding(20)
-                        .background(Color.white.opacity(0.03).cornerRadius(28))
-                        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.05), lineWidth: 1))
                     }
                 }
             }
@@ -619,7 +732,7 @@ struct AllActivityView: View {
                     .fill(Color.black.opacity(0.4))
                     .frame(width: 44, height: 44)
                 Image(systemName: activity.icon)
-                    .foregroundColor(activity.color)
+                    .foregroundColor(activity.iconColor)
             }
             
             VStack(alignment: .leading, spacing: 2) {

@@ -22,3 +22,5 @@ xcuserdata/
 # Misc
 .idea/
 .vscode/
+node_modules/
+*.log
