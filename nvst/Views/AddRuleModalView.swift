@@ -27,6 +27,7 @@ struct AddRuleModalView: View {
                         .font(.system(size: 22, weight: .bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 12)
 
                     VStack(alignment: .leading, spacing: 10) {
                         sectionTitle("SETUP")
