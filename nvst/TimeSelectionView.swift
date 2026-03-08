@@ -6,15 +6,20 @@
 //
 
 import SwiftUI
+import FamilyControls
+import ManagedSettings
 
 struct TimeSelectionView: View {
     @ObservedObject var manager: ScreenTimeManager
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMinutes = 15
     @State private var didUnlock = false
+    @State private var orderStatus: String? = nil
     private let minimumMinutes = 5
     private let maximumMinutes = 180
     private let minuteStep = 5
+    private let rulesKey = "savedRules"
+    private let sharedDefaults = UserDefaults(suiteName: appGroupID)
 
     var body: some View {
         ZStack {
@@ -139,9 +144,68 @@ struct TimeSelectionView: View {
         manager.unlockAndScheduleReblock(minutes: selectedMinutes)
         didUnlock = true
 
+        // Submit order through backend for tracked apps
+        submitTrackUsage(minutes: Double(selectedMinutes))
+
         // Auto-dismiss after a beat
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             dismiss()
         }
+    }
+
+    private func submitTrackUsage(minutes: Double) {
+        let activeRules = loadActiveRulesWithTokens()
+        guard !activeRules.isEmpty else { return }
+
+        // Primary path: use the exact app token that triggered unlock.
+        if let encodedToken = sharedDefaults?.string(forKey: "lastBlockedToken"),
+           activeRules.contains(where: { encodeToken($0.applicationToken) == encodedToken }) {
+            trackAppUsage(appName: encodedToken, minutes: minutes)
+            return
+        }
+
+        // Fallback when unlock wasn't triggered from a specific blocked token.
+        let minutesPerRule = minutes / Double(activeRules.count)
+        for rule in activeRules {
+            guard let encodedToken = encodeToken(rule.applicationToken) else { continue }
+            trackAppUsage(appName: encodedToken, minutes: minutesPerRule)
+        }
+    }
+
+    private func trackAppUsage(appName: String, minutes: Double) {
+        guard let url = URL(string: "http://149.125.114.140:8000/api/track-usage") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "app_name": appName,
+            "usage_minutes": minutes
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let data = data,
+               let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let status = result["status"] as? String {
+                DispatchQueue.main.async {
+                    orderStatus = status == "success" ? "Order placed" : nil
+                }
+            }
+        }.resume()
+    }
+
+    private func loadActiveRulesWithTokens() -> [Rule] {
+        guard let data = UserDefaults.standard.data(forKey: rulesKey),
+              let rules = try? JSONDecoder().decode([Rule].self, from: data) else {
+            return []
+        }
+        return rules.filter { $0.isActive && $0.applicationToken != nil && !$0.ticker.isEmpty }
+    }
+
+    private func encodeToken(_ token: ApplicationToken?) -> String? {
+        guard let token,
+              let data = try? JSONEncoder().encode(token) else { return nil }
+        return data.base64EncodedString()
     }
 }

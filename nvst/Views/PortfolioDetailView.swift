@@ -36,16 +36,16 @@ struct PortfolioDetailView: View {
                     .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 64, height: 64)
                     .shadow(color: .black.opacity(0.4), radius: 15)
-                Text(asset.initial)
+                Text(asset.appInitial)
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
             }
-            
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(asset.ticker)
+                Text(asset.appName)
                     .font(.system(size: 30, weight: .black, design: .rounded))
                     .foregroundColor(.white)
-                Text(asset.company)
+                Text("\(asset.ticker) · \(asset.company)")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.gray)
             }
@@ -93,10 +93,9 @@ struct PortfolioDetailView: View {
     
     private var statsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-            statItem(label: "Shares", value: String(format: "%.4f", asset.shares))
+            statItem(label: "Screen Time", value: asset.formattedTime)
             statItem(label: "Avg Cost", value: "$\(String(format: "%.2f", asset.avgCost))")
             statItem(label: "Invested", value: "$\(String(format: "%.2f", asset.totalInvested))")
-            statItem(label: "Rate", value: asset.rate, valueColor: .green)
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 40)

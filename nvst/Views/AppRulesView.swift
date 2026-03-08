@@ -3,10 +3,38 @@ import FamilyControls
 
 struct AppRulesView: View {
     @State private var rules: [Rule] = []
-    
+
     @State private var showActivityPicker = false
     @State private var showAddModal = false
     @State private var newSelection = FamilyActivitySelection()
+
+    private static let rulesKey = "savedRules"
+
+    private func saveRules() {
+        if let data = try? JSONEncoder().encode(rules) {
+            UserDefaults.standard.set(data, forKey: Self.rulesKey)
+        }
+        applyShields()
+    }
+
+    private func loadRules() {
+        guard let data = UserDefaults.standard.data(forKey: Self.rulesKey),
+              let decoded = try? JSONDecoder().decode([Rule].self, from: data) else { return }
+        rules = decoded
+        applyShields()
+    }
+
+    private func applyShields() {
+        let manager = ScreenTimeManager.shared
+        guard !manager.isUnlocked else { return }
+        var selection = FamilyActivitySelection()
+        for rule in rules where rule.isActive {
+            if let token = rule.applicationToken {
+                selection.applicationTokens.insert(token)
+            }
+        }
+        manager.selection = selection
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -87,12 +115,19 @@ struct AppRulesView: View {
         .sheet(isPresented: $showAddModal) {
             AddRuleModalView(isPresented: $showAddModal, selection: $newSelection) { newRule in
                 rules.append(newRule)
+                saveRules()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .onboardingRuleCreated)) { notification in
             if let rule = notification.object as? Rule {
                 rules.append(rule)
             }
+        }
+        .onAppear {
+            loadRules()
+        }
+        .onChange(of: rules) { _ in
+            saveRules()
         }
     }
 

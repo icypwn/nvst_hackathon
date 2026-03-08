@@ -32,6 +32,7 @@ class ScreenTimeManager: ObservableObject {
         didSet { applyShield() }
     }
     @Published var isAuthorized = false
+    @Published var isUnlocked = false
 
     private init() {
         isAuthorized = AuthorizationCenter.shared.authorizationStatus == .approved
@@ -71,14 +72,22 @@ class ScreenTimeManager: ObservableObject {
 
     func unlockAndScheduleReblock(minutes: Int) {
         // 1. Unblock immediately
+        isUnlocked = true
         store.shield.applications = nil
+        sharedDefaults?.set(true, forKey: "isUnlocked")
 
         // 2. Stop any existing monitoring
         center.stopMonitoring([.reblock])
 
-        // 3. Schedule reblock after X minutes
+        // Schedule isUnlocked reset after the timer
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(minutes * 60)) { [weak self] in
+            self?.isUnlocked = false
+            self?.sharedDefaults?.set(false, forKey: "isUnlocked")
+        }
+
+        // 3. Schedule a 15-minute reblock interval starting X minutes from now
         let reblockTime = Calendar.current.date(byAdding: .minute, value: minutes, to: Date())!
-        let safetyTime = Calendar.current.date(byAdding: .minute, value: minutes + 1, to: reblockTime)!
+        let safetyTime = Calendar.current.date(byAdding: .minute, value: 15, to: reblockTime)!
 
         let schedule = DeviceActivitySchedule(
             intervalStart: Calendar.current.dateComponents([.hour, .minute, .second], from: reblockTime),
@@ -93,6 +102,16 @@ class ScreenTimeManager: ObservableObject {
             // Safety: re-block immediately if scheduling fails
             applyShield()
         }
+    }
+
+    // MARK: - Unlock Request Detection
+
+    /// Check if the shield action set the didTapUnlock flag and show time selection
+    func checkForUnlockRequest() -> Bool {
+        guard let sharedDefaults = sharedDefaults,
+              sharedDefaults.bool(forKey: "didTapUnlock") else { return false }
+        sharedDefaults.set(false, forKey: "didTapUnlock")
+        return true
     }
 
     // MARK: - Token Persistence (base64-encoded JSON)

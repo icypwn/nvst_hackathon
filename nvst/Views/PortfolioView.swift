@@ -6,15 +6,16 @@ struct PortfolioView: View {
     @State private var showAllActivity = false
     @State private var selectedAsset: AssetHolding?
     @Namespace private var portfolioAnimation
-    
+
     @StateObject private var viewModel = PortfolioViewModel()
-    
-    let timeRanges = ["1D", "1W", "1M"]
-    
+
+    let timeRanges = ["D", "W", "M"]
+    let timeRangeAPICodes = ["1D", "1W", "1M"]
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                     Section(header: stickyHeader) {
@@ -30,7 +31,7 @@ struct PortfolioView: View {
                 }
                 .padding(.bottom, 100)
             }
-            
+
             if showAllHoldings {
                 AllHoldingsView(isVisible: $showAllHoldings, holdings: viewModel.holdings, onSelect: { asset in
                     selectedAsset = asset
@@ -38,7 +39,7 @@ struct PortfolioView: View {
                 .transition(.move(edge: .trailing))
                 .zIndex(10)
             }
-            
+
             if showAllActivity {
                 AllActivityView(isVisible: $showAllActivity, activities: viewModel.recentActivity)
                 .transition(.move(edge: .trailing))
@@ -50,10 +51,10 @@ struct PortfolioView: View {
         }
         .onAppear {
             viewModel.fetchPortfolio()
-            viewModel.fetchHistory(period: timeRanges[selectedTimeRange])
+            viewModel.fetchHistory(period: timeRangeAPICodes[selectedTimeRange])
         }
     }
-    
+
     private var stickyHeader: some View {
         HStack {
             Text("Portfolio")
@@ -82,18 +83,25 @@ struct PortfolioView: View {
             .padding(.bottom, -30)
         )
     }
-    
+
     private var balanceSection: some View {
         VStack(spacing: 4) {
             Text("PORTFOLIO VALUE")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(.gray)
                 .tracking(1.2)
-            
-            Text(viewModel.portfolioValue == 0 ? "$0.00" : viewModel.formattedPortfolioValue)
+
+            Text(viewModel.displayTotal == 0 ? "$0.00" : viewModel.formattedPortfolioValue)
                 .font(.system(size: 44, weight: .black, design: .rounded))
                 .foregroundColor(.white)
-            
+
+            if viewModel.pendingValue > 0 {
+                Text("Includes $\(String(format: "%.2f", viewModel.pendingValue)) pending")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.orange.opacity(0.7))
+                    .padding(.bottom, 2)
+            }
+
             HStack(spacing: 6) {
                 Image(systemName: "trending.up")
                     .font(.system(size: 14, weight: .bold))
@@ -112,7 +120,7 @@ struct PortfolioView: View {
         .padding(.top, 24)
         .padding(.bottom, 16)
     }
-    
+
     private var chartSection: some View {
         GeometryReader { geo in
             ZStack {
@@ -121,25 +129,25 @@ struct PortfolioView: View {
                     let maxVal = viewModel.historicalEquity.max() ?? (minVal + 1)
                     let range = max(maxVal - minVal, 1.0)
                     let stepX = geo.size.width / CGFloat(max(viewModel.historicalEquity.count - 1, 1))
-                    
+
                     Path { path in
                         for (index, value) in viewModel.historicalEquity.enumerated() {
                             let x = CGFloat(index) * stepX
                             let y = geo.size.height - CGFloat((value - minVal) / range) * geo.size.height
-                            
+
                             if index == 0 {
                                 path.move(to: CGPoint(x: x, y: y))
                             } else {
                                 path.addLine(to: CGPoint(x: x, y: y))
                             }
                         }
-                        
+
                         if viewModel.historicalEquity.count == 1 {
                             path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
                         }
                     }
                     .stroke(Color(red: 0.19, green: 0.82, blue: 0.35), lineWidth: 3)
-                    
+
                     LinearGradient(colors: [Color(red: 0.19, green: 0.82, blue: 0.35).opacity(0.4), .clear],
                                    startPoint: .top, endPoint: .bottom)
                     .mask(
@@ -147,18 +155,18 @@ struct PortfolioView: View {
                             for (index, value) in viewModel.historicalEquity.enumerated() {
                                 let x = CGFloat(index) * stepX
                                 let y = geo.size.height - CGFloat((value - minVal) / range) * geo.size.height
-                                
+
                                 if index == 0 {
                                     path.move(to: CGPoint(x: x, y: y))
                                 } else {
                                     path.addLine(to: CGPoint(x: x, y: y))
                                 }
                             }
-                            
+
                             if viewModel.historicalEquity.count == 1 {
                                 path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
                             }
-                            
+
                             path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height))
                             path.addLine(to: CGPoint(x: 0, y: geo.size.height))
                             path.closeSubpath()
@@ -176,14 +184,14 @@ struct PortfolioView: View {
         .frame(height: 220)
         .padding(.top, 8)
     }
-    
+
     private var timeControlSection: some View {
         HStack(spacing: 0) {
             ForEach(0..<timeRanges.count, id: \.self) { index in
                 Button {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                         selectedTimeRange = index
-                        viewModel.fetchHistory(period: timeRanges[index])
+                        viewModel.fetchHistory(period: timeRangeAPICodes[index])
                     }
                 } label: {
                     Text(timeRanges[index])
@@ -207,55 +215,34 @@ struct PortfolioView: View {
         .padding(3)
         .background(Color(white: 0.11).cornerRadius(12))
         .padding(.horizontal, 24)
-        .padding(.top, 8)
+        .padding(.top, 20)
         .padding(.bottom, 32)
     }
-    
+
     private var statWidgetsSection: some View {
         HStack(spacing: 16) {
-            statWidget(icon: "clock.arrow.2.circlepath", color: .blue, label: "Converted", value: String(format: "%.1f", viewModel.totalConvertedHrs), unit: "HRS", progress: 0.75)
-            statWidget(icon: "flame.fill", color: .purple, label: "Top Engine", value: viewModel.topEngine, badge: "Hot")
+            statWidget(icon: "clock.arrow.2.circlepath", color: .blue, label: "Converted", value: String(format: "%.1f", viewModel.totalConvertedHrs), unit: "HRS")
+            statWidget(icon: "flame.fill", color: .purple, label: "Top App", value: viewModel.topEngine)
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 32)
     }
-    
-    private func statWidget(icon: String, color: Color, label: String, value: String, unit: String? = nil, progress: Double? = nil, badge: String? = nil) -> some View {
+
+    private func statWidget(icon: String, color: Color, label: String, value: String, unit: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(color.opacity(0.2))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: icon)
-                        .foregroundColor(color)
-                }
-                Spacer()
-                if let progress = progress {
-                    ZStack {
-                        Circle()
-                            .stroke(Color(white: 0.15), lineWidth: 3)
-                        Circle()
-                            .trim(from: 0, to: progress)
-                            .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                    }
-                    .frame(width: 32, height: 32)
-                } else if let badge = badge {
-                    Text(badge)
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundColor(color.opacity(0.8))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(color.opacity(0.2).cornerRadius(6))
-                }
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(color.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                Image(systemName: icon)
+                    .foregroundColor(color)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(label.uppercased())
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.gray)
-                
+
                 HStack(alignment: .lastTextBaseline, spacing: 4) {
                     Text(value)
                         .font(.system(size: 24, weight: .black, design: .rounded))
@@ -269,10 +256,11 @@ struct PortfolioView: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity)
-        .glassEffect(GlassMaterial.regular, in: RoundedRectangle(cornerRadius: 24))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.05).cornerRadius(24))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }
-    
+
     private var holdingsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -291,7 +279,7 @@ struct PortfolioView: View {
                         .background(Color.green.opacity(0.1).cornerRadius(15))
                 }
             }
-            
+
             if viewModel.holdings.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "briefcase")
@@ -325,7 +313,7 @@ struct PortfolioView: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 40)
     }
-    
+
     private func assetRow(_ asset: AssetHolding) -> some View {
         Button {
             selectedAsset = asset
@@ -335,28 +323,29 @@ struct PortfolioView: View {
                     RoundedRectangle(cornerRadius: 18)
                         .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 48, height: 48)
-                    Text(asset.initial)
+                    Text(asset.appInitial)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(asset.ticker)
-                        .font(.system(size: 16, weight: .heavy))
-                        .foregroundColor(.white)
-                    Text(asset.company)
+                    HStack(spacing: 6) {
+                        Text(asset.appName)
+                            .font(.system(size: 16, weight: .heavy))
+                            .foregroundColor(.white)
+                        if asset.isPending {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.yellow)
+                        }
+                    }
+                    Text("\(asset.ticker) · \(asset.formattedTime)")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.gray)
                 }
-                
+
                 Spacer()
-                
-                SparklineView(data: asset.sparklineData, color: asset.isPositive ? .green : .red)
-                    .frame(width: 56, height: 32)
-                    .opacity(0.6)
-                
-                Spacer().frame(width: 20)
-                
+
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("$\(String(format: "%.2f", asset.value))")
                         .font(.system(size: 16, weight: .black, design: .rounded))
@@ -369,7 +358,7 @@ struct PortfolioView: View {
             .padding(16)
         }
     }
-    
+
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
@@ -388,7 +377,7 @@ struct PortfolioView: View {
                         .background(Color.green.opacity(0.1).cornerRadius(15))
                 }
             }
-            
+
             if viewModel.recentActivity.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "clock.badge.exclamationmark")
@@ -416,7 +405,7 @@ struct PortfolioView: View {
         }
         .padding(.horizontal, 24)
     }
-    
+
     private func activityRow(_ activity: ActivityEntry) -> some View {
         HStack(spacing: 16) {
             ZStack {
@@ -427,7 +416,7 @@ struct PortfolioView: View {
                     .foregroundColor(activity.iconColor)
             }
             .shadow(color: .black.opacity(0.3), radius: 10)
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(activity.title)
                     .font(.system(size: 14, weight: .heavy))
@@ -436,9 +425,9 @@ struct PortfolioView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.gray)
             }
-            
+
             Spacer()
-            
+
             VStack(alignment: .trailing, spacing: 2) {
                 Text(activity.amount)
                     .font(.system(size: 14, weight: .black, design: .rounded))
@@ -449,12 +438,13 @@ struct PortfolioView: View {
             }
         }
     }
+
 }
 
 struct SparklineView: View {
     let data: [Double]
     let color: Color
-    
+
     var body: some View {
         GeometryReader { geo in
             Path { path in
@@ -462,12 +452,12 @@ struct SparklineView: View {
                 let stepX = geo.size.width / CGFloat(data.count - 1)
                 let range = (data.max() ?? 0) - (data.min() ?? 0)
                 let stepY = range == 0 ? 0 : geo.size.height / CGFloat(range)
-                
+
                 let points = data.enumerated().map { index, value in
                     CGPoint(x: CGFloat(index) * stepX,
                             y: geo.size.height - CGFloat(value - (data.min() ?? 0)) * stepY)
                 }
-                
+
                 path.move(to: points[0])
                 for i in 1..<points.count {
                     path.addLine(to: points[i])
@@ -483,7 +473,7 @@ struct AllHoldingsView: View {
     let holdings: [AssetHolding]
     let onSelect: (AssetHolding) -> Void
     @State private var searchText = ""
-    
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -492,7 +482,7 @@ struct AllHoldingsView: View {
         }
         .background(Color.black.ignoresSafeArea())
     }
-    
+
     private var header: some View {
         HStack(spacing: 16) {
             Button {
@@ -504,7 +494,7 @@ struct AllHoldingsView: View {
                     .frame(width: 40, height: 40)
                     .background(Color.white.opacity(0.05).cornerRadius(20))
             }
-            
+
             Text("All Assets")
                 .font(.system(size: 24, weight: .black, design: .rounded))
                 .foregroundColor(.white)
@@ -531,7 +521,7 @@ struct AllHoldingsView: View {
             .padding(.bottom, -30)
         )
     }
-    
+
     private var searchBar: some View {
         HStack {
             Image(systemName: "magnifyingglass")
@@ -546,7 +536,7 @@ struct AllHoldingsView: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 20)
     }
-    
+
     private var assetList: some View {
         ScrollView(showsIndicators: false) {
             Group {
@@ -586,35 +576,29 @@ struct AllHoldingsView: View {
             .padding(.bottom, 40)
         }
     }
-    
+
     private func assetRow(_ asset: AssetHolding) -> some View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 18)
                     .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 48, height: 48)
-                Text(asset.initial)
+                Text(asset.appInitial)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
             }
-            
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(asset.ticker)
+                Text(asset.appName)
                     .font(.system(size: 16, weight: .heavy))
                     .foregroundColor(.white)
-                Text(asset.company)
+                Text("\(asset.ticker) · \(asset.formattedTime)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.gray)
             }
-            
+
             Spacer()
-            
-            SparklineView(data: asset.sparklineData, color: asset.isPositive ? .green : .red)
-                .frame(width: 56, height: 32)
-                .opacity(0.6)
-            
-            Spacer().frame(width: 20)
-            
+
             VStack(alignment: .trailing, spacing: 2) {
                 Text("$\(String(format: "%.2f", asset.value))")
                     .font(.system(size: 16, weight: .black, design: .rounded))
@@ -631,7 +615,7 @@ struct AllHoldingsView: View {
 struct AllActivityView: View {
     @Binding var isVisible: Bool
     let activities: [ActivityGroup]
-    
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -639,7 +623,7 @@ struct AllActivityView: View {
         }
         .background(Color.black.ignoresSafeArea())
     }
-    
+
     private var header: some View {
         HStack(spacing: 16) {
             Button {
@@ -651,7 +635,7 @@ struct AllActivityView: View {
                     .frame(width: 40, height: 40)
                     .background(Color.white.opacity(0.05).cornerRadius(20))
             }
-            
+
             Text("Activity History")
                 .font(.system(size: 24, weight: .black, design: .rounded))
                 .foregroundColor(.white)
@@ -678,7 +662,7 @@ struct AllActivityView: View {
             .padding(.bottom, -30)
         )
     }
-    
+
     private var activityFeed: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 32) {
@@ -706,7 +690,7 @@ struct AllActivityView: View {
                                 .foregroundColor(.gray)
                                 .tracking(1.5)
                                 .padding(.leading, 4)
-                            
+
                             VStack(spacing: 24) {
                                 ForEach(group.items) { activity in
                                     activityRow(activity)
@@ -724,7 +708,7 @@ struct AllActivityView: View {
             .padding(.bottom, 40)
         }
     }
-    
+
     private func activityRow(_ activity: ActivityEntry) -> some View {
         HStack(spacing: 16) {
             ZStack {
@@ -734,7 +718,7 @@ struct AllActivityView: View {
                 Image(systemName: activity.icon)
                     .foregroundColor(activity.iconColor)
             }
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(activity.title)
                     .font(.system(size: 14, weight: .heavy))
@@ -743,9 +727,9 @@ struct AllActivityView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.gray)
             }
-            
+
             Spacer()
-            
+
             VStack(alignment: .trailing, spacing: 2) {
                 Text(activity.amount)
                     .font(.system(size: 14, weight: .black, design: .rounded))

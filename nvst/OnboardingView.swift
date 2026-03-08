@@ -8,10 +8,11 @@
 import SwiftUI
 import UserNotifications
 import FamilyControls
+import ManagedSettings
 
 struct OnboardingView: View {
     @ObservedObject var manager: ScreenTimeManager
-    @Environment(\.dismiss) private var dismiss
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
     // 0 = Welcome, 1 = Track, 2 = Buy Stock, 3 = Permissions
     // 4 = Select App, 5 = Select Ticker, 6 = Investment Settings
@@ -21,10 +22,15 @@ struct OnboardingView: View {
     
     @State private var animatePulse = false
     
+    
     // Setup state
     @State private var showActivityPicker = false
     @State private var appSelection = FamilyActivitySelection()
     @State private var tickerText = ""
+    @State private var selectedTicker: TickerSearchResult? = nil
+    @State private var tickerSearchResults: [TickerSearchResult] = []
+    @State private var isSearchingTicker = false
+    @State private var tickerSearchTask: Task<Void, Never>? = nil
     @State private var investRate: Double = 0.10
     @State private var dailyCap: Double = 5
     
@@ -368,16 +374,11 @@ struct OnboardingView: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                HStack(spacing: 0) {
-                    Text("APP")
-                        .font(.system(size: 46, weight: .black, design: .rounded))
-                        .foregroundColor(.green)
-                    Text(".")
-                        .font(.system(size: 46, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                Text("APP")
+                    .font(.system(size: 46, weight: .black, design: .rounded))
+                    .foregroundColor(.green)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             
             Text("Choose the app you want to track. Every minute you spend on it will automatically invest into a stock of your choice.")
@@ -447,98 +448,223 @@ struct OnboardingView: View {
     // MARK: - Slide 6: Select Ticker
     
     private var slideSelectTicker: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("CHOOSE A")
-                    .font(.system(size: 46, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                HStack(spacing: 0) {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("CHOOSE THE")
+                        .font(.system(size: 46, weight: .black, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     Text("TICKER")
                         .font(.system(size: 46, weight: .black, design: .rounded))
                         .foregroundColor(.green)
-                    Text(".")
-                        .font(.system(size: 46, weight: .black, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+
+                // Ticker explanation
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("What's a ticker?")
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
+                    Text("A **ticker** is a short code that represents a company on the stock market. For example, **META** is Meta (Instagram & Facebook), **GOOGL** is Google (YouTube), and **AAPL** is Apple.")
+                        .font(.subheadline)
+                        .foregroundColor(Color(white: 0.55))
+                        .lineSpacing(4)
                 }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            }
-            
-            // Ticker explanation
-            VStack(alignment: .leading, spacing: 8) {
-                Text("What's a ticker?")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                Text("A **ticker** is a short code that represents a company on the stock market. For example, **META** is Meta (Instagram & Facebook), **GOOGL** is Google (YouTube), and **AAPL** is Apple.")
-                    .font(.subheadline)
-                    .foregroundColor(Color(white: 0.55))
-                    .lineSpacing(4)
-            }
-            .padding(16)
-            .background(Color(white: 0.08))
-            .cornerRadius(16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
-            
-            // Search field
-            HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(Color(white: 0.4))
-                    .font(.system(size: 16))
-                TextField("Type a ticker (e.g. AAPL)", text: $tickerText)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.characters)
-                
-                if !tickerText.isEmpty {
-                    Button {
-                        tickerText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color(white: 0.4))
-                    }
-                }
-            }
-            .padding(16)
-            .background(Color(white: 0.08))
-            .cornerRadius(16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(hasTicker ? Color.green.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 1.5)
-            )
-            
-            // Popular tickers
-            VStack(alignment: .leading, spacing: 10) {
-                Text("POPULAR")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Color(white: 0.35))
-                    .tracking(1.5)
-                
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], spacing: 8) {
-                    ForEach(tickerSuggestions, id: \.self) { ticker in
-                        Button {
-                            withAnimation(.easeOut(duration: 0.15)) {
-                                tickerText = ticker
+                .padding(16)
+                .background(Color(white: 0.08))
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                )
+
+                // Search field
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        if let ticker = selectedTicker {
+                            HStack(spacing: 6) {
+                                Text(ticker.symbol)
+                                    .font(.system(size: 14, weight: .black))
+                                    .foregroundColor(.green)
+                                Text(ticker.name)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(Color(white: 0.6))
+                                    .lineLimit(1)
+                                Spacer()
+                                Button {
+                                    selectedTicker = nil
+                                    tickerText = ""
+                                    tickerSearchResults = []
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(Color(white: 0.4))
+                                        .font(.system(size: 18))
+                                }
                             }
-                        } label: {
-                            Text(ticker)
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundColor(tickerText == ticker ? .black : .white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(tickerText == ticker ? Color.green : Color(white: 0.12))
-                                .cornerRadius(10)
+                        } else {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(Color(white: 0.4))
+                                .font(.system(size: 16))
+                            TextField("Search ticker (e.g. AAPL)", text: $tickerText)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.characters)
+                                .onChange(of: tickerText) { newValue in
+                                    performTickerSearch(query: newValue)
+                                }
+                            if isSearchingTicker {
+                                ProgressView()
+                                    .tint(.green)
+                                    .scaleEffect(0.8)
+                            } else if !tickerText.isEmpty {
+                                Button {
+                                    tickerText = ""
+                                    tickerSearchResults = []
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(Color(white: 0.4))
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(white: 0.08))
+                    .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(selectedTicker != nil ? Color.green.opacity(0.5) : hasTicker ? Color.green.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 1.5)
+                    )
+                }
+
+                // Search results
+                if !tickerSearchResults.isEmpty && selectedTicker == nil {
+                    VStack(spacing: 0) {
+                        ForEach(tickerSearchResults) { result in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedTicker = result
+                                    tickerText = result.symbol
+                                    tickerSearchResults = []
+                                }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Text(result.symbol)
+                                        .font(.system(size: 13, weight: .black))
+                                        .foregroundColor(.green)
+                                        .frame(width: 60, alignment: .leading)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(result.name)
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.white)
+                                            .lineLimit(1)
+                                        HStack(spacing: 6) {
+                                            Text(result.exchange)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundColor(Color(white: 0.4))
+                                            if result.fractionable {
+                                                Text("Fractional")
+                                                    .font(.system(size: 10, weight: .semibold))
+                                                    .foregroundColor(.green.opacity(0.8))
+                                                    .padding(.horizontal, 5)
+                                                    .padding(.vertical, 1)
+                                                    .background(Color.green.opacity(0.1))
+                                                    .cornerRadius(3)
+                                            }
+                                        }
+                                    }
+                                    Spacer()
+                                    Image(systemName: "plus.circle")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(Color(white: 0.3))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            if result.id != tickerSearchResults.last?.id {
+                                Divider()
+                                    .background(Color.white.opacity(0.05))
+                                    .padding(.leading, 88)
+                            }
+                        }
+                    }
+                    .background(Color(white: 0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.06), lineWidth: 1))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                // Popular tickers
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("POPULAR")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Color(white: 0.35))
+                        .tracking(1.5)
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], spacing: 8) {
+                        ForEach(tickerSuggestions, id: \.self) { ticker in
+                            Button {
+                                withAnimation(.easeOut(duration: 0.15)) {
+                                    selectedTicker = TickerSearchResult(symbol: ticker, name: ticker, exchange: "", fractionable: true)
+                                    tickerText = ticker
+                                    tickerSearchResults = []
+                                }
+                            } label: {
+                                Text(ticker)
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundColor(tickerText == ticker ? .black : .white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(tickerText == ticker ? Color.green : Color(white: 0.12))
+                                    .cornerRadius(10)
+                            }
                         }
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func performTickerSearch(query: String) {
+        tickerSearchTask?.cancel()
+
+        guard query.count >= 1 else {
+            tickerSearchResults = []
+            isSearchingTicker = false
+            return
+        }
+
+        isSearchingTicker = true
+
+        tickerSearchTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+
+            guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                  let url = URL(string: "http://149.125.114.140:8000/api/search-ticker?q=\(encoded)") else {
+                await MainActor.run { isSearchingTicker = false }
+                return
+            }
+
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let decoded = try JSONDecoder().decode(TickerSearchResponse.self, from: data)
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        tickerSearchResults = decoded.results
+                        isSearchingTicker = false
+                    }
+                }
+            } catch {
+                if !Task.isCancelled {
+                    await MainActor.run { isSearchingTicker = false }
+                }
+            }
+        }
     }
     
     // MARK: - Slide 7: Investment Settings
@@ -551,16 +677,11 @@ struct OnboardingView: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                HStack(spacing: 0) {
-                    Text("RATE")
-                        .font(.system(size: 46, weight: .black, design: .rounded))
-                        .foregroundColor(.green)
-                    Text(".")
-                        .font(.system(size: 46, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                Text("RATE")
+                    .font(.system(size: 46, weight: .black, design: .rounded))
+                    .foregroundColor(.green)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             
             Text("How much should we invest per minute of screen time?")
@@ -721,12 +842,12 @@ struct OnboardingView: View {
     private func finishOnboarding() {
         if hasApp && hasTicker,
            let token = appSelection.applicationTokens.first {
+            let ticker = selectedTicker?.symbol ?? tickerText.uppercased()
             let rule = Rule(
                 id: UUID().uuidString,
-                appName: "",
-                appInitial: "",
-                gradientColors: [.gray],
-                ticker: tickerText,
+                appName: selectedTicker?.name ?? "",
+                appInitial: String(ticker.prefix(1)),
+                ticker: ticker,
                 rate: investRate,
                 timeSpan: 1,
                 cap: dailyCap,
@@ -735,8 +856,34 @@ struct OnboardingView: View {
                 applicationToken: token
             )
             NotificationCenter.default.post(name: .onboardingRuleCreated, object: rule)
+            if let encodedToken = encodeToken(token) {
+                savePreference(appName: encodedToken, ticker: ticker, ratePerMinute: investRate)
+            }
         }
-        dismiss()
+        withAnimation {
+            hasCompletedOnboarding = true
+        }
+    }
+
+    private func savePreference(appName: String, ticker: String, ratePerMinute: Double) {
+        guard let url = URL(string: "http://149.125.114.140:8000/api/preferences") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "app_name": appName,
+            "investment_rate_per_hour": ratePerMinute * 60,
+            "ticker": ticker
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
+    }
+
+    private func encodeToken(_ token: ApplicationToken) -> String? {
+        guard let data = try? JSONEncoder().encode(token) else { return nil }
+        return data.base64EncodedString()
     }
 }
 

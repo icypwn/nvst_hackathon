@@ -7,28 +7,19 @@
 
 import SwiftUI
 import FamilyControls
+import ManagedSettings
 
-// MARK: - Mock Data
+// MARK: - Ring Data
 
 struct AppShare: Identifiable {
     let id = UUID()
     let name: String
-    let iconLetter: String
-    let iconColors: [Color]
-    let timeString: String
-    let gainAmount: String
-    let stockTicker: String
+    let applicationToken: ApplicationToken?
+    let screenTime: String
+    let invested: String
     let ringColor: Color
     let percentage: Double
 }
-
-let mockShares: [AppShare] = [
-    AppShare(name: "Instagram", iconLetter: "I", iconColors: [.purple, .pink, .orange, .yellow], timeString: "2h 5m today", gainAmount: "+$12.50", stockTicker: "0.0258 META", ringColor: .pink, percentage: 0.41),
-    AppShare(name: "YouTube", iconLetter: "Y", iconColors: [.red], timeString: "1h 24m today", gainAmount: "+$8.40", stockTicker: "0.0591 GOOGL", ringColor: .red, percentage: 0.28),
-    AppShare(name: "TikTok", iconLetter: "T", iconColors: [Color(red: 0.0, green: 0.9, blue: 0.8)], timeString: "1h 2m today", gainAmount: "+$6.20", stockTicker: "0.0419 BDNCE", ringColor: .cyan, percentage: 0.20),
-    AppShare(name: "Snapchat", iconLetter: "S", iconColors: [.yellow], timeString: "22m today", gainAmount: "+$2.10", stockTicker: "0.0182 SNAP", ringColor: .yellow, percentage: 0.07),
-    AppShare(name: "Twitter", iconLetter: "X", iconColors: [.blue], timeString: "8m today", gainAmount: "+$0.90", stockTicker: "0.0031 TWTR", ringColor: .green, percentage: 0.04),
-]
 
 // MARK: - Tab Item
 
@@ -62,43 +53,42 @@ struct ContentView: View {
     @State private var showTimeSelection = false
     @Namespace private var tabAnimation
 
-    @State private var showOnboarding = false
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+            if !hasCompletedOnboarding {
+                OnboardingView(manager: manager)
+                    .transition(.opacity)
+                    .zIndex(100)
+            } else {
+                Color.black.ignoresSafeArea()
 
-            switch activeTab {
-            case .home:
-                HomeView(manager: manager, showTimeSelection: $showTimeSelection)
-            case .appPicker:
-                AppRulesView()
-            case .portfolio:
-                PortfolioView()
-            case .settings:
-                SettingsView()
+                switch activeTab {
+                case .home:
+                    HomeView(manager: manager, showTimeSelection: $showTimeSelection)
+                case .appPicker:
+                    AppRulesView()
+                case .portfolio:
+                    PortfolioView()
+                case .settings:
+                    SettingsView()
+                }
+
+                floatingTabBar
             }
-
-            floatingTabBar
-        }
-        .sheet(isPresented: $showOnboarding) {
-            OnboardingView(manager: manager)
-                .interactiveDismissDisabled(!manager.isAuthorized)
         }
         .sheet(isPresented: $showTimeSelection) {
             TimeSelectionView(manager: manager)
         }
         .preferredColorScheme(.dark)
-        .onAppear {
-            if !manager.isAuthorized {
-                showOnboarding = true
-            }
-        }
-        .onChange(of: manager.isAuthorized) { _ in
-            // Onboarding dismisses itself after the user finishes setup
-        }
         .onReceive(NotificationCenter.default.publisher(for: .showTimeSelection)) { _ in
             showTimeSelection = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            if manager.checkForUnlockRequest() {
+                showTimeSelection = true
+            }
         }
     }
 
@@ -213,8 +203,52 @@ struct ContentView: View {
 struct HomeView: View {
     @ObservedObject var manager: ScreenTimeManager
     @Binding var showTimeSelection: Bool
+    @StateObject private var viewModel = PortfolioViewModel()
+    @State private var rules: [Rule] = []
     @State private var selectedTab = 0
     let tabs = ["Today", "This Week", "All Time"]
+    private static let rulesKey = "savedRules"
+
+    private var shares: [AppShare] {
+        let activeRules = rules.filter { $0.isActive && $0.applicationToken != nil }
+        let rulesByTicker = Dictionary(grouping: activeRules, by: { $0.ticker.uppercased() })
+
+        var cardRows: [(holding: AssetHolding, rule: Rule?)] = []
+        for holding in viewModel.holdings {
+            let matchedRules = rulesByTicker[holding.ticker.uppercased()] ?? []
+            if matchedRules.isEmpty {
+                cardRows.append((holding, nil))
+            } else {
+                for rule in matchedRules {
+                    cardRows.append((holding, rule))
+                }
+            }
+        }
+
+        let totalValue = cardRows.reduce(0.0) { partial, row in
+            let splitCount = Double(max((rulesByTicker[row.holding.ticker.uppercased()] ?? []).count, 1))
+            return partial + (row.holding.value / splitCount)
+        }
+        guard totalValue > 0 else { return [] }
+
+        let ringColors: [Color] = [.green, .blue, .pink, .orange, .cyan, .yellow, .purple, .red, .mint, .indigo]
+
+        return cardRows.enumerated().map { index, row in
+            let matchedCount = Double(max((rulesByTicker[row.holding.ticker.uppercased()] ?? []).count, 1))
+            let perTokenValue = row.holding.value / matchedCount
+            let perTokenInvested = row.holding.totalInvested / matchedCount
+            let pct = perTokenValue / totalValue
+
+            return AppShare(
+                name: row.rule?.appName.isEmpty == false ? (row.rule?.appName ?? row.holding.appName) : row.holding.appName,
+                applicationToken: row.rule?.applicationToken,
+                screenTime: row.holding.formattedTime,
+                invested: "$\(String(format: "%.2f", perTokenInvested))",
+                ringColor: ringColors[index % ringColors.count],
+                percentage: pct
+            )
+        }
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -222,35 +256,39 @@ struct HomeView: View {
                 headerSection
                 ringChartSection
                 tabPicker
-
                 sharesSection
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 120)
         }
+        .onAppear {
+            loadRules()
+            viewModel.fetchPortfolio()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .onboardingRuleCreated)) { _ in
+            loadRules()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            loadRules()
+        }
+    }
+
+    private func loadRules() {
+        guard let data = UserDefaults.standard.data(forKey: Self.rulesKey),
+              let decoded = try? JSONDecoder().decode([Rule].self, from: data) else {
+            rules = []
+            return
+        }
+        rules = decoded
     }
 
     // MARK: - Header
 
     private var headerSection: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("PORTFOLIO SUMMARY")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.gray)
-                    .tracking(1)
-                HStack(spacing: 0) {
-                    Text("Time")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    Text("Invest")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.green)
-                }
-            }
+            Text("nvst.")
+                .font(.system(size: 24, weight: .black, design: .rounded))
+                .foregroundColor(.green)
             Spacer()
             Circle()
                 .fill(Color(white: 0.15))
@@ -267,23 +305,21 @@ struct HomeView: View {
 
     private var ringChartSection: some View {
         ZStack {
-            // Ring segments
-            DonutChart(shares: mockShares)
+            DonutChart(shares: shares)
                 .frame(width: 300, height: 300)
 
-            // Center content
             VStack(spacing: 6) {
                 Text("Total Auto-Invested")
                     .font(.subheadline)
                     .foregroundColor(.gray)
-                Text("$30.10")
+                Text(viewModel.totalAutoInvestedString)
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
                         .font(.caption)
                         .foregroundColor(.gray)
-                    Text("5h 1m")
+                    Text(viewModel.totalTimeString)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(.white)
@@ -291,16 +327,16 @@ struct HomeView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                         .font(.caption2)
-                    Text("+$4.50")
+                    Text(viewModel.totalGainString)
                         .font(.footnote)
                         .fontWeight(.semibold)
                 }
-                .foregroundColor(.green)
+                .foregroundColor(viewModel.totalGainString.hasPrefix("-") ? .red : .green)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(Color.green.opacity(0.15))
+                        .fill((viewModel.totalGainString.hasPrefix("-") ? Color.red : Color.green).opacity(0.15))
                 )
             }
         }
@@ -347,56 +383,76 @@ struct HomeView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
 
-            ForEach(mockShares) { share in
-                shareCard(share)
+            if shares.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "chart.pie")
+                        .font(.system(size: 32))
+                        .foregroundColor(Color(white: 0.25))
+                    Text("No investments yet")
+                        .font(.subheadline)
+                        .foregroundColor(Color(white: 0.4))
+                    Text("Set up an app rule to start investing")
+                        .font(.caption)
+                        .foregroundColor(Color(white: 0.3))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                ForEach(shares) { share in
+                    shareCard(share)
+                }
             }
         }
     }
 
     private func shareCard(_ share: AppShare) -> some View {
         HStack(spacing: 14) {
-            // App Icon
-            RoundedRectangle(cornerRadius: 14)
-                .fill(
-                    LinearGradient(
-                        colors: share.iconColors,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 50, height: 50)
-                .overlay(
-                    Text(share.iconLetter)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
-
-            // Name + Time
-            VStack(alignment: .leading, spacing: 4) {
-                Text(share.name)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                    Text(share.timeString)
-                        .font(.caption)
+            Group {
+                if let token = share.applicationToken {
+                    Label(token)
+                        .labelStyle(.iconOnly)
+                        .scaleEffect(2.2)
+                        .frame(width: 50, height: 50)
+                } else {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color(white: 0.2))
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Text(String(share.name.prefix(1)).uppercased())
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        )
                 }
-                .foregroundColor(.gray)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                if let token = share.applicationToken {
+                    Label(token)
+                        .labelStyle(.titleOnly)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                } else {
+                    Text(share.name)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
             }
 
             Spacer()
 
-            // Gain + Ticker
             VStack(alignment: .trailing, spacing: 4) {
-                Text(share.gainAmount)
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.green)
-                Text(share.stockTicker)
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.fill")
+                        .font(.caption2)
+                    Text(share.screenTime)
+                        .font(.headline)
+                        .fontWeight(.bold)
+                }
+                .foregroundColor(.white)
+                Text(share.invested)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.green)
             }
         }
         .padding(16)
@@ -480,7 +536,6 @@ struct DonutChart: View {
     let shares: [AppShare]
     let thickness: CGFloat = 28
     let gapDegrees: Double = 2
-    /// Adjust this to control endpoint roundness: 0 = flat, thickness/2 = fully round
     let cornerRadius: CGFloat = 8
 
     var body: some View {
@@ -490,21 +545,33 @@ struct DonutChart: View {
             let innerRadius = outerRadius - thickness
 
             ZStack {
-                let totalGap = gapDegrees * Double(shares.count)
-                let usableDegrees = 360.0 - totalGap
+                if shares.isEmpty {
+                    // Empty state: full gray ring
+                    Circle()
+                        .stroke(Color(white: 0.15), lineWidth: thickness)
+                        .frame(width: size - thickness, height: size - thickness)
+                } else if shares.count == 1 {
+                    // Single segment: use a plain circle to avoid rounded-corner gap
+                    Circle()
+                        .stroke(shares[0].ringColor, lineWidth: thickness)
+                        .frame(width: size - thickness, height: size - thickness)
+                } else {
+                    let totalGap = gapDegrees * Double(shares.count)
+                    let usableDegrees = 360.0 - totalGap
 
-                ForEach(0..<shares.count, id: \.self) { index in
-                    let startDeg = segmentStart(index: index, usableDegrees: usableDegrees)
-                    let endDeg = startDeg + shares[index].percentage * usableDegrees
+                    ForEach(0..<shares.count, id: \.self) { index in
+                        let startDeg = segmentStart(index: index, usableDegrees: usableDegrees)
+                        let endDeg = startDeg + shares[index].percentage * usableDegrees
 
-                    RoundedArcSegment(
-                        startAngle: .degrees(startDeg),
-                        endAngle: .degrees(endDeg),
-                        innerRadius: innerRadius,
-                        outerRadius: outerRadius,
-                        cornerRadius: cornerRadius
-                    )
-                    .fill(shares[index].ringColor)
+                        RoundedArcSegment(
+                            startAngle: .degrees(startDeg),
+                            endAngle: .degrees(endDeg),
+                            innerRadius: innerRadius,
+                            outerRadius: outerRadius,
+                            cornerRadius: cornerRadius
+                        )
+                        .fill(shares[index].ringColor)
+                    }
                 }
             }
             .frame(width: size, height: size)

@@ -14,18 +14,27 @@ struct RuleCardView: View {
                 
                 VStack(alignment: .leading, spacing: 6) {
                     if let token = rule.applicationToken {
-                        Label(token)
-                            .labelStyle(.titleOnly)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
+                        HStack(spacing: 6) {
+                            Label(token)
+                                .labelStyle(.titleOnly)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                            if !rule.ticker.isEmpty {
+                                Text("→ \(rule.ticker)")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.green)
+                            }
+                        }
                     } else {
                         HStack(spacing: 4) {
                             Text(rule.appName)
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.white)
-                            Text("→ \(rule.ticker)")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(Color(white: 0.4))
+                            if !rule.ticker.isEmpty {
+                                Text("→ \(rule.ticker)")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.green)
+                                }
                         }
                     }
 
@@ -64,10 +73,12 @@ struct RuleCardView: View {
         .opacity(rule.isActive ? 1 : 0.6)
         .grayscale(rule.isActive ? 0 : 0.8)
         .sheet(isPresented: $showDetailSheet) {
-            AddRuleModalView(isPresented: $showDetailSheet, selection: $editSelection) { updatedRule in
+            AddRuleModalView(isPresented: $showDetailSheet, selection: $editSelection, onAdd: { updatedRule in
                 rule.rate = updatedRule.rate
                 rule.cap = updatedRule.cap
-            }
+                rule.ticker = updatedRule.ticker
+                rule.appName = updatedRule.appName
+            }, existingRule: rule)
         }
     }
     
