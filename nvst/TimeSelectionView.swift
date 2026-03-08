@@ -17,32 +17,29 @@ struct TimeSelectionView: View {
     @State private var orderStatus: String? = nil
     private let minimumMinutes = 5
     private let maximumMinutes = 180
-    private let minuteStep = 5
+    private let minuteStep = 1
     private let rulesKey = "savedRules"
     private let sharedDefaults = UserDefaults(suiteName: appGroupID)
+
+    private var matchedRule: Rule? {
+        let activeRules = loadActiveRulesWithTokens()
+        if let encodedToken = sharedDefaults?.string(forKey: "lastBlockedToken"),
+           let rule = activeRules.first(where: { encodeToken($0.applicationToken) == encodedToken }) {
+            return rule
+        }
+        return activeRules.first
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 28) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: "timer")
-                        .font(.system(size: 44))
-                        .foregroundColor(.green)
-
-                    Text("How much time?")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-
-                    Text("Choose how long to unlock your apps.\nYou'll invest based on the time you pick.")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 20)
+                Text("How much time?")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .padding(.top, 20)
 
                 // Dynamic time picker
                 HStack(spacing: 16) {
@@ -70,10 +67,6 @@ struct TimeSelectionView: View {
                     .background(
                         RoundedRectangle(cornerRadius: 16)
                             .fill(Color(white: 0.1))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.green.opacity(0.35), lineWidth: 1)
-                            )
                     )
 
                     Button {
@@ -91,36 +84,63 @@ struct TimeSelectionView: View {
                     .disabled(selectedMinutes >= maximumMinutes)
                 }
 
+                // Stock info
+                if let rule = matchedRule, !rule.ticker.isEmpty {
+                    VStack(spacing: 12) {
+                        AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(rule.ticker)?format=png&size=200")) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().aspectRatio(contentMode: .fit)
+                            default:
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(Color(white: 0.15))
+                                    .overlay(
+                                        Text(rule.ticker)
+                                            .font(.system(size: 28, weight: .bold))
+                                            .foregroundColor(.white)
+                                    )
+                            }
+                        }
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                        )
+
+                        Text("$\(investmentAmount, specifier: "%.2f")")
+                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                            .foregroundColor(.green)
+
+                        Text("\(String(format: "%.2f", investmentAmount / 100.0)) shares")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Color(red: 0.2, green: 0.6, blue: 0.2))
+                    }
+                }
+
                 Spacer()
 
-                // Investment summary
-                VStack(spacing: 6) {
-                    Text("You'll invest")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                    Text("$\(investmentAmount, specifier: "%.2f")")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundColor(.green)
-                    Text("for \(formattedDuration(selectedMinutes)) of screen time")
+                if exceedsLimit {
+                    Text("Exceeds daily limit ($\(String(format: "%.0f", TradingLimits.dailyLimit))). $\(String(format: "%.2f", TradingLimits.remaining)) remaining.")
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
                 }
-                .transition(.opacity)
 
                 // Unlock button
                 Button {
                     unlock()
                 } label: {
-                    Text(didUnlock ? "Unlocked!" : "Invest & Unlock")
+                    Text(didUnlock ? "Unlocked!" : (exceedsLimit ? "Over Daily Limit" : "Invest & Unlock"))
                         .font(.headline)
-                        .foregroundColor(.black)
+                        .foregroundColor(exceedsLimit ? .white : .black)
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
                         .background(
-                            Capsule().fill(didUnlock ? Color(white: 0.2) : .green)
+                            Capsule().fill(didUnlock ? Color(white: 0.2) : (exceedsLimit ? Color(white: 0.2) : .green))
                         )
                 }
-                .disabled(didUnlock)
+                .disabled(didUnlock || exceedsLimit)
                 .padding(.bottom, 20)
             }
             .padding(.horizontal, 24)
@@ -129,6 +149,10 @@ struct TimeSelectionView: View {
 
     private var investmentAmount: Double {
         Double(selectedMinutes) * 0.10
+    }
+
+    private var exceedsLimit: Bool {
+        investmentAmount > TradingLimits.remaining
     }
 
     private func formattedDuration(_ minutes: Int) -> String {
@@ -147,6 +171,9 @@ struct TimeSelectionView: View {
         // Submit order through backend for tracked apps
         submitTrackUsage(minutes: Double(selectedMinutes))
 
+        // Notify home page to refresh
+        NotificationCenter.default.post(name: .usageRecorded, object: nil)
+
         // Auto-dismiss after a beat
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             dismiss()
@@ -159,8 +186,9 @@ struct TimeSelectionView: View {
 
         // Primary path: use the exact app token that triggered unlock.
         if let encodedToken = sharedDefaults?.string(forKey: "lastBlockedToken"),
-           activeRules.contains(where: { encodeToken($0.applicationToken) == encodedToken }) {
+           let matchedRule = activeRules.first(where: { encodeToken($0.applicationToken) == encodedToken }) {
             trackAppUsage(appName: encodedToken, minutes: minutes)
+            ScreenTimeStore.record(ruleId: matchedRule.id, minutes: minutes, rate: matchedRule.rate)
             return
         }
 
@@ -169,11 +197,12 @@ struct TimeSelectionView: View {
         for rule in activeRules {
             guard let encodedToken = encodeToken(rule.applicationToken) else { continue }
             trackAppUsage(appName: encodedToken, minutes: minutesPerRule)
+            ScreenTimeStore.record(ruleId: rule.id, minutes: minutesPerRule, rate: rule.rate)
         }
     }
 
     private func trackAppUsage(appName: String, minutes: Double) {
-        guard let url = URL(string: "http://149.125.114.140:8000/api/track-usage") else { return }
+        guard let url = URL(string: "http://149.125.202.134:8000/api/track-usage") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -105,24 +105,31 @@ struct AddRuleModalView: View {
                 // Destination
                 VStack(spacing: 12) {
                     if let ticker = selectedTicker {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.green.opacity(0.15))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.green.opacity(0.4), lineWidth: 1.5)
-                                )
-                            Text(ticker.symbol)
-                                .font(.system(size: 18, weight: .black))
-                                .foregroundColor(.green)
+                        AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(ticker.symbol)?format=png&size=200")) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                            default:
+                                ZStack {
+                                    Color.green.opacity(0.15)
+                                    Text(ticker.symbol)
+                                        .font(.system(size: 18, weight: .black))
+                                        .foregroundColor(.green)
+                                }
+                            }
                         }
                         .frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.green.opacity(0.4), lineWidth: 1.5)
+                        )
 
-                        Text(ticker.name)
-                            .font(.system(size: 9, weight: .semibold))
+                        Text(ticker.symbol)
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.green)
-                            .lineLimit(1)
-                            .frame(maxWidth: 80)
                     } else {
                         ZStack {
                             RoundedRectangle(cornerRadius: 16)
@@ -386,7 +393,7 @@ struct AddRuleModalView: View {
             if Task.isCancelled { return }
 
             guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                  let url = URL(string: "http://149.125.114.140:8000/api/search-ticker?q=\(encoded)") else {
+                  let url = URL(string: "http://149.125.202.134:8000/api/search-ticker?q=\(encoded)") else {
                 await MainActor.run { isSearching = false }
                 return
             }
@@ -409,7 +416,7 @@ struct AddRuleModalView: View {
     }
 
     private func savePreference(appName: String, ticker: String) {
-        guard let url = URL(string: "http://149.125.114.140:8000/api/preferences") else { return }
+        guard let url = URL(string: "http://149.125.202.134:8000/api/preferences") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

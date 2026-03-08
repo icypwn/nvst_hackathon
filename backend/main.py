@@ -92,23 +92,22 @@ def get_portfolio():
             return_pct = ((current_value - inv_amount) / inv_amount) * 100.0 if inv_amount > 0 else 0.0
             total_current_value += current_value
             
+            company_name = trading.get_asset_name(ticker)
             display_name = "X" if app_name.lower() == "twitter" else app_name.capitalize()
-            
-            pref = user_preferences["apps"].get(app_name.lower())
-            rate_per_hour = pref["rate_per_hour"] if pref else 0.0
-            
+
             holdings.append({
                 "id": app_name.lower(),
                 "ticker": ticker,
-                "company": display_name,
-                "initial": display_name[0].upper() if display_name else "A",
+                "company": company_name,
+                "initial": ticker[0].upper() if ticker else "A",
                 "iconClass": f"icon-{app_name.lower()}",
                 "value": current_value,
                 "returnPct": return_pct,
-                "shares": shares_qty,
+                "timeMinutes": mins,
                 "avgCost": avg_price,
                 "totalInvested": inv_amount,
-                "rate": f"${rate_per_hour:.2f} / hr",
+                "appName": display_name,
+                "appInitial": display_name[0].upper() if display_name else "A",
                 "sparklineData": [0, 0]
             })
 
@@ -127,6 +126,23 @@ def get_portfolio():
                     top_engine = s["company"]
                 
         holdings.sort(key=lambda x: x["value"], reverse=True)
+
+        # Get pending/scheduled orders (placed but not yet filled)
+        pending_orders = trading.get_open_orders()
+        pending_value = 0.0
+        pending_list = []
+        for o in pending_orders:
+            notional = float(o.notional) if o.notional else 0.0
+            pending_value += notional
+            company_name = trading.get_asset_name(o.symbol)
+            pending_list.append({
+                "id": str(o.id),
+                "symbol": o.symbol,
+                "company": company_name,
+                "notional": notional,
+                "status": str(o.status.value) if o.status else "pending",
+                "submitted_at": str(o.submitted_at) if o.submitted_at else ""
+            })
         
         grouped_activities = {}
         for entry in user_activity_log:
@@ -150,6 +166,8 @@ def get_portfolio():
             "top_engine": top_engine,
             "holdings": holdings,
             "activities": activities_list,
+            "pending_orders": pending_list,
+            "pending_value": pending_value,
             "raw_alpaca_data": {
                 "portfolio_value": float(account.portfolio_value),
                 "buying_power": float(account.buying_power),
@@ -240,6 +258,37 @@ def track_usage(data: UsageData):
          raise HTTPException(status_code=500, detail=f"Purchase failed: {result.get('error')}")
 
 
+@app.get("/api/search-ticker")
+def search_ticker(q: str = ""):
+    if len(q) < 1:
+        return {"results": []}
+    results = trading.search_assets(q)
+    return {"results": results}
+
+
+@app.get("/api/pending-orders")
+def get_pending_orders():
+    """Debug endpoint to see all open/unfilled orders."""
+    try:
+        orders = trading.get_open_orders()
+        result = []
+        for o in orders:
+            result.append({
+                "id": str(o.id),
+                "symbol": o.symbol,
+                "notional": float(o.notional) if o.notional else 0.0,
+                "qty": str(o.qty) if o.qty else None,
+                "status": str(o.status.value) if o.status else "unknown",
+                "type": str(o.type.value) if o.type else "unknown",
+                "side": str(o.side.value) if o.side else "unknown",
+                "submitted_at": str(o.submitted_at) if o.submitted_at else "",
+                "created_at": str(o.created_at) if o.created_at else "",
+            })
+        return {"count": len(result), "orders": result}
+    except Exception as e:
+        return {"error": str(e), "count": 0, "orders": []}
+
+
 @app.get("/api/preferences")
 def get_preferences():
     return user_preferences
@@ -257,5 +306,5 @@ def update_preference(pref: PreferenceData):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 

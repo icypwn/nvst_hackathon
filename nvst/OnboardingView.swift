@@ -69,7 +69,7 @@ struct OnboardingView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("nvst.")
+                    Text("nvst")
                         .font(.system(size: 24, weight: .black, design: .rounded))
                         .foregroundColor(.green)
                     Spacer()
@@ -645,7 +645,7 @@ struct OnboardingView: View {
             if Task.isCancelled { return }
 
             guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                  let url = URL(string: "http://149.125.114.140:8000/api/search-ticker?q=\(encoded)") else {
+                  let url = URL(string: "http://149.125.202.134:8000/api/search-ticker?q=\(encoded)") else {
                 await MainActor.run { isSearchingTicker = false }
                 return
             }
@@ -699,7 +699,7 @@ struct OnboardingView: View {
                             .scaleEffect(2.0)
                             .frame(width: 44, height: 44)
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         if let token = appSelection.applicationTokens.first {
                             Label(token)
@@ -866,7 +866,7 @@ struct OnboardingView: View {
     }
 
     private func savePreference(appName: String, ticker: String, ratePerMinute: Double) {
-        guard let url = URL(string: "http://149.125.114.140:8000/api/preferences") else { return }
+        guard let url = URL(string: "http://149.125.202.134:8000/api/preferences") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -884,6 +884,23 @@ struct OnboardingView: View {
     private func encodeToken(_ token: ApplicationToken) -> String? {
         guard let data = try? JSONEncoder().encode(token) else { return nil }
         return data.base64EncodedString()
+    }
+
+    private func stockLogo(ticker: String, size: CGFloat) -> some View {
+        AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(ticker)?format=png&size=200")) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            default:
+                Text(ticker)
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundColor(.green)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 }
 

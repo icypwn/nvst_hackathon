@@ -79,6 +79,7 @@ struct ActivityGroup: Identifiable, Codable {
 struct PendingOrder: Identifiable, Codable {
     let id: String
     let symbol: String
+    let company: String?
     let notional: Double
     let status: String
     let submitted_at: String
@@ -171,7 +172,7 @@ class PortfolioViewModel: ObservableObject {
     }
 
     func fetchPortfolio() {
-        guard let url = URL(string: "http://149.125.114.140:8000/api/portfolio") else { return }
+        guard let url = URL(string: "http://149.125.202.134:8000/api/portfolio") else { return }
 
         URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
             guard let data = data, error == nil else {
@@ -215,10 +216,11 @@ class PortfolioViewModel: ObservableObject {
                             )
                         } else {
                             // No holding yet — create one from the pending order
+                            let companyName = order.company ?? symbol
                             allHoldings.append(AssetHolding(
                                 id: "pending-\(order.id)",
                                 ticker: symbol,
-                                company: symbol,
+                                company: companyName,
                                 initial: String(symbol.prefix(1)),
                                 iconClass: "icon-\(symbol.lowercased())",
                                 value: order.notional,
@@ -226,7 +228,7 @@ class PortfolioViewModel: ObservableObject {
                                 timeMinutes: 0,
                                 avgCost: 0,
                                 totalInvested: order.notional,
-                                appName: symbol,
+                                appName: companyName,
                                 appInitial: String(symbol.prefix(1)),
                                 sparklineData: [0, 0],
                                 isPending: true
@@ -244,7 +246,7 @@ class PortfolioViewModel: ObservableObject {
     }
     
     func fetchHistory(period: String = "1M") {
-        guard let url = URL(string: "http://149.125.114.140:8000/api/history?period=\(period)") else { return }
+        guard let url = URL(string: "http://149.125.202.134:8000/api/history?period=\(period)") else { return }
         
         URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
             guard let data = data, error == nil else {

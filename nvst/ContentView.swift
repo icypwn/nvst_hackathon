@@ -14,6 +14,7 @@ import ManagedSettings
 struct AppShare: Identifiable {
     let id = UUID()
     let name: String
+    let ticker: String
     let applicationToken: ApplicationToken?
     let screenTime: String
     let invested: String
@@ -205,45 +206,73 @@ struct HomeView: View {
     @Binding var showTimeSelection: Bool
     @StateObject private var viewModel = PortfolioViewModel()
     @State private var rules: [Rule] = []
+    @State private var localUsage: [DailyUsage] = []
     @State private var selectedTab = 0
     let tabs = ["Today", "This Week", "All Time"]
     private static let rulesKey = "savedRules"
 
+    private var filteredUsage: [DailyUsage] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+
+        switch selectedTab {
+        case 0: // Today
+            return localUsage.filter { $0.date == today }
+        case 1: // This Week
+            let calendar = Calendar.current
+            guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: Date())?.start else { return localUsage }
+            return localUsage.filter {
+                guard let date = formatter.date(from: $0.date) else { return false }
+                return date >= weekStart
+            }
+        default: // All Time
+            return localUsage
+        }
+    }
+
+    private var filteredTotals: (minutes: Double, invested: Double) {
+        let activeRuleIds = Set(rules.filter { $0.isActive }.map { $0.id })
+        let relevant = filteredUsage.filter { activeRuleIds.contains($0.ruleId) }
+        return (
+            relevant.reduce(0) { $0 + $1.minutes },
+            relevant.reduce(0) { $0 + $1.invested }
+        )
+    }
+
     private var shares: [AppShare] {
         let activeRules = rules.filter { $0.isActive && $0.applicationToken != nil }
-        let rulesByTicker = Dictionary(grouping: activeRules, by: { $0.ticker.uppercased() })
+        guard !activeRules.isEmpty else { return [] }
 
-        var cardRows: [(holding: AssetHolding, rule: Rule?)] = []
-        for holding in viewModel.holdings {
-            let matchedRules = rulesByTicker[holding.ticker.uppercased()] ?? []
-            if matchedRules.isEmpty {
-                cardRows.append((holding, nil))
-            } else {
-                for rule in matchedRules {
-                    cardRows.append((holding, rule))
-                }
-            }
+        // Aggregate filtered usage by rule ID
+        var aggregated: [String: (minutes: Double, invested: Double)] = [:]
+        for entry in filteredUsage {
+            let existing = aggregated[entry.ruleId] ?? (0, 0)
+            aggregated[entry.ruleId] = (existing.minutes + entry.minutes, existing.invested + entry.invested)
         }
-
-        let totalValue = cardRows.reduce(0.0) { partial, row in
-            let splitCount = Double(max((rulesByTicker[row.holding.ticker.uppercased()] ?? []).count, 1))
-            return partial + (row.holding.value / splitCount)
-        }
-        guard totalValue > 0 else { return [] }
 
         let ringColors: [Color] = [.green, .blue, .pink, .orange, .cyan, .yellow, .purple, .red, .mint, .indigo]
 
-        return cardRows.enumerated().map { index, row in
-            let matchedCount = Double(max((rulesByTicker[row.holding.ticker.uppercased()] ?? []).count, 1))
-            let perTokenValue = row.holding.value / matchedCount
-            let perTokenInvested = row.holding.totalInvested / matchedCount
-            let pct = perTokenValue / totalValue
+        var items: [(rule: Rule, minutes: Double, invested: Double)] = []
+        for rule in activeRules {
+            let agg = aggregated[rule.id] ?? (0, 0)
+            items.append((rule, agg.minutes, agg.invested))
+        }
+
+        let totalInvested = items.reduce(0) { $0 + $1.invested }
+
+        return items.enumerated().map { index, item in
+            let hrs = Int(item.minutes) / 60
+            let mins = Int(item.minutes) % 60
+            let timeStr = hrs > 0 ? "\(hrs)h \(mins)m" : "\(mins)m"
+            let pct = totalInvested > 0 ? item.invested / totalInvested : 1.0 / Double(items.count)
 
             return AppShare(
-                name: row.rule?.appName.isEmpty == false ? (row.rule?.appName ?? row.holding.appName) : row.holding.appName,
-                applicationToken: row.rule?.applicationToken,
-                screenTime: row.holding.formattedTime,
-                invested: "$\(String(format: "%.2f", perTokenInvested))",
+                name: item.rule.appName,
+                ticker: item.rule.ticker,
+                applicationToken: item.rule.applicationToken,
+                screenTime: timeStr,
+                invested: "$\(String(format: "%.2f", item.invested))",
                 ringColor: ringColors[index % ringColors.count],
                 percentage: pct
             )
@@ -263,13 +292,21 @@ struct HomeView: View {
         }
         .onAppear {
             loadRules()
+            localUsage = ScreenTimeStore.load()
             viewModel.fetchPortfolio()
         }
         .onReceive(NotificationCenter.default.publisher(for: .onboardingRuleCreated)) { _ in
             loadRules()
+            localUsage = ScreenTimeStore.load()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             loadRules()
+            localUsage = ScreenTimeStore.load()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .usageRecorded)) { _ in
+            loadRules()
+            localUsage = ScreenTimeStore.load()
+            viewModel.fetchPortfolio()
         }
     }
 
@@ -286,18 +323,10 @@ struct HomeView: View {
 
     private var headerSection: some View {
         HStack {
-            Text("nvst.")
+            Text("nvst")
                 .font(.system(size: 24, weight: .black, design: .rounded))
                 .foregroundColor(.green)
             Spacer()
-            Circle()
-                .fill(Color(white: 0.15))
-                .frame(width: 44, height: 44)
-                .overlay(
-                    Image(systemName: "person")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white)
-                )
         }
     }
 
@@ -309,17 +338,20 @@ struct HomeView: View {
                 .frame(width: 300, height: 300)
 
             VStack(spacing: 6) {
-                Text("Total Auto-Invested")
+                Text("Total Invested")
                     .font(.subheadline)
                     .foregroundColor(.gray)
-                Text(viewModel.totalAutoInvestedString)
+                Text("$\(String(format: "%.2f", filteredTotals.invested))")
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
                         .font(.caption)
                         .foregroundColor(.gray)
-                    Text(viewModel.totalTimeString)
+                    let hrs = Int(filteredTotals.minutes) / 60
+                    let mins = Int(filteredTotals.minutes) % 60
+                    let suffix = selectedTab == 0 ? "today" : selectedTab == 1 ? "this week" : "all time"
+                    Text(hrs > 0 ? "\(hrs)h \(mins)m \(suffix)" : "\(mins)m \(suffix)")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(.white)
@@ -427,15 +459,22 @@ struct HomeView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                if let token = share.applicationToken {
-                    Label(token)
-                        .labelStyle(.titleOnly)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                } else {
-                    Text(share.name)
-                        .font(.headline)
-                        .foregroundColor(.white)
+                HStack(spacing: 6) {
+                    if let token = share.applicationToken {
+                        Label(token)
+                            .labelStyle(.titleOnly)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    } else {
+                        Text(share.name)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    if !share.ticker.isEmpty {
+                        Text("→ \(share.ticker)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.green)
+                    }
                 }
             }
 
@@ -460,6 +499,32 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: 18)
                 .fill(Color(white: 0.1))
         )
+        .overlay(
+            HStack {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(share.ringColor)
+                    .frame(width: 4)
+                Spacer()
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+        )
+    }
+
+    private func stockLogo(ticker: String, size: CGFloat) -> some View {
+        AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(ticker)?format=png&size=200")) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            default:
+                Text(ticker)
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundColor(.green)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 }
 
@@ -538,6 +603,10 @@ struct DonutChart: View {
     let gapDegrees: Double = 2
     let cornerRadius: CGFloat = 8
 
+    private var visibleShares: [AppShare] {
+        shares.filter { $0.percentage > 0 }
+    }
+
     var body: some View {
         GeometryReader { geo in
             let size = min(geo.size.width, geo.size.height)
@@ -545,23 +614,23 @@ struct DonutChart: View {
             let innerRadius = outerRadius - thickness
 
             ZStack {
-                if shares.isEmpty {
+                if visibleShares.isEmpty {
                     // Empty state: full gray ring
                     Circle()
                         .stroke(Color(white: 0.15), lineWidth: thickness)
                         .frame(width: size - thickness, height: size - thickness)
-                } else if shares.count == 1 {
+                } else if visibleShares.count == 1 {
                     // Single segment: use a plain circle to avoid rounded-corner gap
                     Circle()
-                        .stroke(shares[0].ringColor, lineWidth: thickness)
+                        .stroke(visibleShares[0].ringColor, lineWidth: thickness)
                         .frame(width: size - thickness, height: size - thickness)
                 } else {
-                    let totalGap = gapDegrees * Double(shares.count)
+                    let totalGap = gapDegrees * Double(visibleShares.count)
                     let usableDegrees = 360.0 - totalGap
 
-                    ForEach(0..<shares.count, id: \.self) { index in
+                    ForEach(0..<visibleShares.count, id: \.self) { index in
                         let startDeg = segmentStart(index: index, usableDegrees: usableDegrees)
-                        let endDeg = startDeg + shares[index].percentage * usableDegrees
+                        let endDeg = startDeg + visibleShares[index].percentage * usableDegrees
 
                         RoundedArcSegment(
                             startAngle: .degrees(startDeg),
@@ -570,7 +639,7 @@ struct DonutChart: View {
                             outerRadius: outerRadius,
                             cornerRadius: cornerRadius
                         )
-                        .fill(shares[index].ringColor)
+                        .fill(visibleShares[index].ringColor)
                     }
                 }
             }
@@ -581,7 +650,7 @@ struct DonutChart: View {
     private func segmentStart(index: Int, usableDegrees: Double) -> Double {
         var deg = -90.0
         for i in 0..<index {
-            deg += shares[i].percentage * usableDegrees + gapDegrees
+            deg += visibleShares[i].percentage * usableDegrees + gapDegrees
         }
         return deg
     }
@@ -591,6 +660,7 @@ struct DonutChart: View {
 
 extension Notification.Name {
     static let showTimeSelection = Notification.Name("com.nvst.showTimeSelection")
+    static let usageRecorded = Notification.Name("com.nvst.usageRecorded")
 }
 
 // MARK: - Preview

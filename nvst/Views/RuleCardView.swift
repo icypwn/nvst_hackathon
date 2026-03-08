@@ -34,7 +34,7 @@ struct RuleCardView: View {
                                 Text("→ \(rule.ticker)")
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundColor(.green)
-                                }
+                            }
                         }
                     }
 
@@ -47,22 +47,13 @@ struct RuleCardView: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(Color(white: 0.3))
             }
-            .padding(.bottom, 8)
         }
-        .padding(20)
+        .padding(16)
         .background(
-            ZStack {
-                Color(white: 0.08).opacity(0.5)
-                RoundedRectangle(cornerRadius: 32)
-                    .fill(.ultraThinMaterial)
-            }
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color(white: 0.1))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 32))
-        .overlay(
-            RoundedRectangle(cornerRadius: 32)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 32))
+        .contentShape(RoundedRectangle(cornerRadius: 18))
         .onTapGesture {
             if let token = rule.applicationToken {
                 editSelection = FamilyActivitySelection()
@@ -90,20 +81,7 @@ struct RuleCardView: View {
                 .scaleEffect(1.8)
                 .frame(width: 40, height: 40)
         } else {
-            ZStack {
-                if rule.gradientColors.count > 1 {
-                    LinearGradient(colors: rule.gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                } else {
-                    rule.gradientColors.first ?? .clear
-                }
-            }
-            .frame(width: 40, height: 40)
-            .cornerRadius(12)
-            .overlay(
-                Text(rule.appInitial)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.white)
-            )
+            stockLogo(ticker: rule.ticker, size: 40)
         }
     }
     
@@ -126,5 +104,22 @@ struct RuleCardView: View {
         if minutes == 60 { return "1 hr" }
         return "\(minutes) min"
     }
-    
+
+    private func stockLogo(ticker: String, size: CGFloat) -> some View {
+        AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(ticker)?format=png&size=200")) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            default:
+                Text(ticker)
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundColor(.green)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+
 }

@@ -31,50 +31,46 @@ struct SettingsView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 Color.black.ignoresSafeArea()
-                
+
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
-                        HStack {
-                            Text("Settings")
-                                .font(.system(size: 32, weight: .bold))
-                                .foregroundColor(.white)
-                                .tracking(-0.5)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.top, 16)
-                        .padding(.bottom, -8)
-                        
+                        SectionLabel("ACCOUNT")
                         NavigationLink(destination: ProfileEditView()) {
                             ProfileCard()
                         }
-                        
+
+                        SectionLabel("PREFERENCES")
                         SettingsGroup {
                             NavigationLink(destination: NotificationsView()) {
                                 SettingsRow(icon: "bell.fill", color: Color(hex: "FF3B30"), title: "Notifications")
                             }
                             Divider().background(Color.white.opacity(0.05)).padding(.leading, 54)
-                            SettingsRow(icon: "moon.fill", color: Color(hex: "5E5CE6"), title: "Display & Appearance", value: "Dark", showChevron: true)
+                            SettingsRow(icon: "iphone.radiowaves.left.and.right", color: Color(hex: "5E5CE6"), title: "Haptic Feedback", value: "On", showChevron: true)
                         }
-                        
+
+                        SectionLabel("FINANCIAL")
                         SettingsGroup {
                             NavigationLink(destination: LinkedFundingView()) {
                                 SettingsRow(icon: "building.columns.fill", color: Color(hex: "34C759"), title: "Linked Funding", value: "Chase Bank")
                             }
                             Divider().background(Color.white.opacity(0.05)).padding(.leading, 54)
-                            SettingsRow(icon: "chart.pie.fill", color: Color(hex: "FF9500"), title: "Trading Limits", showChevron: true)
+                            NavigationLink(destination: TradingLimitsView()) {
+                                SettingsRow(icon: "chart.pie.fill", color: Color(hex: "FF9500"), title: "Trading Limits", value: "$\(String(format: "%.0f", TradingLimits.dailyLimit))/day")
+                            }
                             Divider().background(Color.white.opacity(0.05)).padding(.leading, 54)
                             SettingsRow(icon: "doc.text.fill", color: Color(hex: "007AFF"), title: "Tax Documents", showChevron: true)
                         }
-                        
+
+                        SectionLabel("SECURITY")
                         SettingsGroup {
                             SettingsRow(icon: "faceid", color: Color(hex: "32ADE6"), title: "Face ID & Passcode", showChevron: true)
                             Divider().background(Color.white.opacity(0.05)).padding(.leading, 54)
                             SettingsRow(icon: "checkmark.shield.fill", color: Color(hex: "8E8E93"), title: "Privacy Settings", showChevron: true)
                         }
-                        
+
+                        SectionLabel("LEGAL & SUPPORT")
                         SettingsGroup {
                             NavigationLink(destination: LegalView(title: "Privacy Policy")) {
                                 SettingsRow(icon: "lock.fill", color: Color(hex: "AF52DE"), title: "Privacy Policy")
@@ -83,8 +79,6 @@ struct SettingsView: View {
                             NavigationLink(destination: LegalView(title: "Terms & Conditions")) {
                                 SettingsRow(icon: "book.fill", color: Color(hex: "AF52DE"), title: "Terms & Conditions")
                             }
-                            Divider().background(Color.white.opacity(0.05)).padding(.leading, 54)
-                            SettingsRow(icon: "questionmark.circle.fill", color: Color(hex: "FF2D55"), title: "Help Center", showChevron: true)
                         }
                         
                         SettingsGroup {
@@ -102,15 +96,17 @@ struct SettingsView: View {
                             }
                         }
                         
-                        Text("TimeInvest v2.4.0 (102)")
+                        Text("nvst v2.4.0 (102)")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Color(hex: "8E8E93"))
                             .padding(.top, 6)
                             .padding(.bottom, 120)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.top, 70)
                 }
+
+                settingsHeader
             }
             .toolbar(.hidden, for: .navigationBar)
             .confirmationDialog("", isPresented: $showLogoutModal) {
@@ -120,6 +116,67 @@ struct SettingsView: View {
                 Text("Are you sure you want to log out?\nBackground investing engines will remain active.")
             }
         }
+    }
+
+    private var settingsHeader: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Settings")
+                    .font(.system(size: 32, weight: .black))
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+            .background(
+                ZStack {
+                    Color.black.opacity(0.4)
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.04), location: 0),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+                .padding(.top, -200)
+                .ignoresSafeArea()
+            )
+            .overlay(
+                VStack {
+                    Spacer()
+                    Divider()
+                        .background(Color.white.opacity(0.08))
+                }
+            )
+
+            LinearGradient(colors: [.black.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 10)
+        }
+    }
+}
+
+struct SectionLabel: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 13))
+                .foregroundColor(Color(hex: "8E8E93"))
+            Spacer()
+        }
+        .padding(.leading, 16)
+        .padding(.bottom, -16)
     }
 }
 
@@ -185,33 +242,16 @@ struct ProfileCard: View {
     var body: some View {
         SettingsGroup {
             HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "6366F1"), Color(hex: "A855F7"), Color(hex: "EC4899")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 64, height: 64)
-                    
-                    AsyncImage(url: URL(string: "https://api.dicebear.com/7.x/notionists/png?seed=Alex&backgroundColor=transparent")) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } placeholder: {
-                        Color(hex: "1C1C1E")
-                    }
-                    .frame(width: 60, height: 60)
-                    .clipShape(Circle())
-                }
-                
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(Color(hex: "8E8E93"))
+                    .frame(width: 64, height: 64)
+
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Alex Rivera")
+                    Text("Ivan Vested")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.white)
-                    Text("alex.riv@email.com")
+                    Text("ivanvested@gmail.com")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(Color(hex: "8E8E93"))
                 }
@@ -231,8 +271,8 @@ struct ProfileCard: View {
 
 struct ProfileEditView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var name: String = "Alex Rivera"
-    @State private var email: String = "alex.riv@email.com"
+    @State private var name: String = "Ivan Vested"
+    @State private var email: String = "ivanvested@gmail.com"
     
     var body: some View {
         ZStack {
@@ -241,18 +281,10 @@ struct ProfileEditView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 32) {
                     VStack(spacing: 12) {
-                        ZStack {
-                            AsyncImage(url: URL(string: "https://api.dicebear.com/7.x/notionists/png?seed=Alex&backgroundColor=transparent")) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } placeholder: {
-                                Color(hex: "1C1C1E")
-                            }
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 96))
+                            .foregroundColor(Color(hex: "8E8E93"))
                             .frame(width: 100, height: 100)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
-                        }
                         
                         Button {
                             
@@ -406,7 +438,7 @@ struct LinkedFundingView: View {
                     }
                     .font(.system(size: 12))
                     .foregroundColor(Color(hex: "8E8E93"))
-                    .padding(.top, 16)
+                    .padding(.top, 4)
                 }
                 .padding(.horizontal, 16)
             }
@@ -515,6 +547,120 @@ struct ToggleRow: View {
     }
 }
 
+struct TradingLimitsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var dailyLimit: Double = TradingLimits.dailyLimit
+
+    let presets: [Double] = [10, 25, 50, 100, 200]
+
+    private var spentToday: Double {
+        ScreenTimeStore.todayTotal()
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(spacing: 16) {
+                        VStack(spacing: 4) {
+                            Text("DAILY LIMIT")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Color(hex: "8E8E93"))
+                                .tracking(1.2)
+                            Text("$\(String(format: "%.0f", dailyLimit))")
+                                .font(.system(size: 48, weight: .black, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+
+                        VStack(spacing: 8) {
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color(white: 0.15))
+                                    Capsule()
+                                        .fill(spentToday >= dailyLimit ? Color.red : Color.green)
+                                        .frame(width: geo.size.width * min(spentToday / max(dailyLimit, 1), 1.0))
+                                }
+                            }
+                            .frame(height: 8)
+
+                            HStack {
+                                Text("$\(String(format: "%.2f", spentToday)) spent today")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text("$\(String(format: "%.2f", max(dailyLimit - spentToday, 0))) remaining")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(spentToday >= dailyLimit ? .red : .green)
+                            }
+                        }
+                    }
+                    .padding(20)
+                    .background(Color(hex: "1C1C1E").cornerRadius(16))
+                    .padding(.top, 24)
+
+                    Text("SET DAILY LIMIT")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(hex: "8E8E93"))
+                        .padding(.leading, 16)
+                        .padding(.bottom, -16)
+
+                    SettingsGroup {
+                        ForEach(Array(presets.enumerated()), id: \.offset) { index, amount in
+                            Button {
+                                dailyLimit = amount
+                                TradingLimits.dailyLimit = amount
+                            } label: {
+                                HStack {
+                                    Text("$\(String(format: "%.0f", amount)) per day")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    if dailyLimit == amount {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.green)
+                                            .font(.system(size: 16, weight: .bold))
+                                    }
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                                .contentShape(Rectangle())
+                            }
+                            if index < presets.count - 1 {
+                                Divider().background(Color.white.opacity(0.05)).padding(.leading, 16)
+                            }
+                        }
+                    }
+
+                    Text("This limit applies across all app rules. You won't be able to unlock apps once you've reached your daily limit.")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: "8E8E93"))
+                        .padding(.horizontal, 16)
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .navigationTitle("Trading Limits")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text("Settings")
+                    }
+                    .foregroundColor(Color(hex: "0A84FF"))
+                }
+            }
+        }
+    }
+}
+
 struct LegalView: View {
     @Environment(\.dismiss) private var dismiss
     var title: String
@@ -535,7 +681,7 @@ struct LegalView: View {
                         Text("1. Acceptance of Terms")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white)
-                        Text("By utilizing the TimeInvest platform and linking your device's screen-time data API, you agree to the automated purchase of fractional shares based on your configured activity triggers.")
+                        Text("By utilizing the nvst platform and linking your device's screen-time data API, you agree to the automated purchase of fractional shares based on your configured activity triggers.")
                             .font(.system(size: 15))
                             .lineSpacing(4)
                     }
@@ -544,7 +690,7 @@ struct LegalView: View {
                         Text("2. Brokerage Services")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white)
-                        Text("All trading and custodial services are provided by our partner brokerage API. TimeInvest acts as a technology intermediary between your device activity logs and your linked brokerage account.")
+                        Text("All trading and custodial services are provided by our partner brokerage API. nvst acts as a technology intermediary between your device activity logs and your linked brokerage account.")
                             .font(.system(size: 15))
                             .lineSpacing(4)
                     }

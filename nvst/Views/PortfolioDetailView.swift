@@ -31,36 +31,34 @@ struct PortfolioDetailView: View {
     
     private var headerSection: some View {
         HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 64, height: 64)
-                    .shadow(color: .black.opacity(0.4), radius: 15)
-                Text(asset.appInitial)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
+            AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(asset.ticker)?format=png&size=200")) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fit)
+                default:
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 22)
+                            .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        Text(asset.appInitial)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
             }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .shadow(color: .black.opacity(0.4), radius: 15)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(asset.appName)
+                Text(asset.ticker)
                     .font(.system(size: 30, weight: .black, design: .rounded))
                     .foregroundColor(.white)
-                Text("\(asset.ticker) · \(asset.company)")
+                Text(asset.company)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.gray)
             }
-            
+
             Spacer()
-            
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.gray)
-                    .frame(width: 40, height: 40)
-                    .background(Color.gray.opacity(0.1).cornerRadius(20))
-            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 24)

@@ -6,11 +6,55 @@ struct PortfolioView: View {
     @State private var showAllActivity = false
     @State private var selectedAsset: AssetHolding?
     @Namespace private var portfolioAnimation
+    @State private var rules: [Rule] = []
+    @State private var localUsage: [DailyUsage] = []
 
     @StateObject private var viewModel = PortfolioViewModel()
 
     let timeRanges = ["D", "W", "M"]
     let timeRangeAPICodes = ["1D", "1W", "1M"]
+    private static let rulesKey = "savedRules"
+
+    private var filteredUsage: [DailyUsage] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+
+        switch selectedTimeRange {
+        case 0: // Day
+            return localUsage.filter { $0.date == today }
+        case 1: // Week
+            let calendar = Calendar.current
+            guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: Date())?.start else { return localUsage }
+            return localUsage.filter {
+                guard let date = formatter.date(from: $0.date) else { return false }
+                return date >= weekStart
+            }
+        default: // Month
+            return localUsage
+        }
+    }
+
+    private var convertedHours: Double {
+        let totalMinutes = filteredUsage.reduce(0) { $0 + $1.minutes }
+        return totalMinutes / 60.0
+    }
+
+    private var topAppRule: Rule? {
+        let activeRules = rules.filter { $0.isActive }
+        guard !activeRules.isEmpty, !filteredUsage.isEmpty else { return nil }
+
+        var minutesByRule: [String: Double] = [:]
+        for entry in filteredUsage {
+            minutesByRule[entry.ruleId, default: 0] += entry.minutes
+        }
+
+        guard let topRuleId = minutesByRule.max(by: { $0.value < $1.value })?.key,
+              let topRule = activeRules.first(where: { $0.id == topRuleId }) else {
+            return nil
+        }
+        return topRule
+    }
 
     var body: some View {
         ZStack {
@@ -23,8 +67,8 @@ struct PortfolioView: View {
                             balanceSection
                             chartSection
                             timeControlSection
-                            statWidgetsSection
                             holdingsSection
+                            statWidgetsSection
                             activitySection
                         }
                     }
@@ -52,36 +96,54 @@ struct PortfolioView: View {
         .onAppear {
             viewModel.fetchPortfolio()
             viewModel.fetchHistory(period: timeRangeAPICodes[selectedTimeRange])
+            localUsage = ScreenTimeStore.load()
+            if let data = UserDefaults.standard.data(forKey: Self.rulesKey),
+               let decoded = try? JSONDecoder().decode([Rule].self, from: data) {
+                rules = decoded
+            }
         }
     }
 
     private var stickyHeader: some View {
-        HStack {
-            Text("Portfolio")
-                .font(.system(size: 34, weight: .black, design: .rounded))
-                .foregroundColor(.white)
-            Spacer()
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 10)
-        .padding(.bottom, 36)
-        .background(
-            VStack(spacing: 0) {
-                Color.black
-                ZStack {
-                    Rectangle()
-                        .fill(.clear)
-                        .background(.ultraThinMaterial)
-                        .mask(
-                            LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
-                        )
-                    LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
-                }
-                .frame(height: 30)
+        VStack(spacing: 0) {
+            HStack {
+                Text("Portfolio")
+                    .font(.system(size: 32, weight: .black))
+                    .foregroundColor(.white)
+                Spacer()
             }
-            .padding(.top, -150)
-            .padding(.bottom, -30)
-        )
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+            .background(
+                ZStack {
+                    Color.black.opacity(0.4)
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.04), location: 0),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+                .padding(.top, -200)
+                .ignoresSafeArea()
+            )
+            .overlay(
+                VStack {
+                    Spacer()
+                    Divider()
+                        .background(Color.white.opacity(0.08))
+                }
+            )
+
+            LinearGradient(colors: [.black.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 10)
+        }
     }
 
     private var balanceSection: some View {
@@ -103,19 +165,20 @@ struct PortfolioView: View {
             }
 
             HStack(spacing: 6) {
-                Image(systemName: "trending.up")
+                Image(systemName: viewModel.totalGainString.hasPrefix("-") ? "arrow.down.right" : "arrow.up.right")
                     .font(.system(size: 14, weight: .bold))
                 Text(viewModel.totalGainString)
                     .font(.system(size: 13, weight: .bold))
             }
-            .foregroundColor(Color(red: 0.19, green: 0.82, blue: 0.35))
+            .foregroundColor(viewModel.totalGainString.hasPrefix("-") ? .red : Color(red: 0.19, green: 0.82, blue: 0.35))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(Color(red: 0.19, green: 0.82, blue: 0.35).opacity(0.1))
-                    .overlay(Capsule().stroke(Color(red: 0.19, green: 0.82, blue: 0.35).opacity(0.2), lineWidth: 1))
+                    .fill((viewModel.totalGainString.hasPrefix("-") ? Color.red : Color(red: 0.19, green: 0.82, blue: 0.35)).opacity(0.1))
+                    .overlay(Capsule().stroke((viewModel.totalGainString.hasPrefix("-") ? Color.red : Color(red: 0.19, green: 0.82, blue: 0.35)).opacity(0.2), lineWidth: 1))
             )
+            .padding(.top, 8)
         }
         .padding(.top, 24)
         .padding(.bottom, 16)
@@ -221,11 +284,52 @@ struct PortfolioView: View {
 
     private var statWidgetsSection: some View {
         HStack(spacing: 16) {
-            statWidget(icon: "clock.arrow.2.circlepath", color: .blue, label: "Converted", value: String(format: "%.1f", viewModel.totalConvertedHrs), unit: "HRS")
-            statWidget(icon: "flame.fill", color: .purple, label: "Top App", value: viewModel.topEngine)
+            statWidget(icon: "clock.arrow.2.circlepath", color: .blue, label: "Converted", value: String(format: "%.1f", convertedHours), unit: "HRS")
+            topAppWidget
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 32)
+    }
+
+    private var topAppWidget: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let rule = topAppRule, let token = rule.applicationToken {
+                Label(token)
+                    .labelStyle(.iconOnly)
+                    .scaleEffect(2.0)
+                    .frame(width: 40, height: 40)
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.purple.opacity(0.2))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "flame.fill")
+                        .foregroundColor(.purple)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("TOP APP")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.gray)
+
+                if let rule = topAppRule, let token = rule.applicationToken {
+                    Label(token)
+                        .labelStyle(.titleOnly)
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                } else {
+                    Text("None")
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.05).cornerRadius(24))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }
 
     private func statWidget(icon: String, color: Color, label: String, value: String, unit: String? = nil) -> some View {
@@ -307,7 +411,7 @@ struct PortfolioView: View {
                         }
                     }
                 }
-                .glassEffect(GlassMaterial.regular, in: RoundedRectangle(cornerRadius: 28))
+                .background(Color(white: 0.1).cornerRadius(18))
             }
         }
         .padding(.horizontal, 24)
@@ -319,18 +423,26 @@ struct PortfolioView: View {
             selectedAsset = asset
         } label: {
             HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 48, height: 48)
-                    Text(asset.appInitial)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
+                AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(asset.ticker)?format=png&size=200")) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fit)
+                    default:
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            Text(asset.appInitial)
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
                 }
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 18))
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(asset.appName)
+                        Text(asset.ticker)
                             .font(.system(size: 16, weight: .heavy))
                             .foregroundColor(.white)
                         if asset.isPending {
@@ -339,9 +451,10 @@ struct PortfolioView: View {
                                 .foregroundColor(.yellow)
                         }
                     }
-                    Text("\(asset.ticker) · \(asset.formattedTime)")
+                    Text(asset.company)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.gray)
+                        .lineLimit(1)
                 }
 
                 Spacer()
@@ -505,7 +618,21 @@ struct AllHoldingsView: View {
         .padding(.bottom, 36)
         .background(
             VStack(spacing: 0) {
-                Color.black
+                ZStack {
+                    Color.black.opacity(0.4)
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.04), location: 0),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
                 ZStack {
                     Rectangle()
                         .fill(.clear)
@@ -569,7 +696,7 @@ struct AllHoldingsView: View {
                             }
                         }
                     }
-                    .glassEffect(GlassMaterial.regular, in: RoundedRectangle(cornerRadius: 28))
+                    .background(Color(white: 0.1).cornerRadius(18))
                 }
             }
             .padding(.horizontal, 24)
@@ -579,22 +706,31 @@ struct AllHoldingsView: View {
 
     private func assetRow(_ asset: AssetHolding) -> some View {
         HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 48, height: 48)
-                Text(asset.appInitial)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
+            AsyncImage(url: URL(string: "https://api.elbstream.com/logos/symbol/\(asset.ticker)?format=png&size=200")) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fit)
+                default:
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(LinearGradient(colors: asset.iconColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        Text(asset.appInitial)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
             }
+            .frame(width: 48, height: 48)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(asset.appName)
+                Text(asset.ticker)
                     .font(.system(size: 16, weight: .heavy))
                     .foregroundColor(.white)
-                Text("\(asset.ticker) · \(asset.formattedTime)")
+                Text(asset.company)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.gray)
+                    .lineLimit(1)
             }
 
             Spacer()
@@ -646,7 +782,21 @@ struct AllActivityView: View {
         .padding(.bottom, 36)
         .background(
             VStack(spacing: 0) {
-                Color.black
+                ZStack {
+                    Color.black.opacity(0.4)
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.04), location: 0),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
                 ZStack {
                     Rectangle()
                         .fill(.clear)
