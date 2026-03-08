@@ -1,10 +1,8 @@
-# trading.py
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.requests import MarketOrderRequest, GetPortfolioHistoryRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from config import settings
 
-# Initialize the Alpaca Trading Client
 trading_client = TradingClient(
     api_key=settings.ALPACA_API_KEY,
     secret_key=settings.ALPACA_SECRET_KEY,
@@ -14,13 +12,28 @@ trading_client = TradingClient(
 def get_account():
     return trading_client.get_account()
 
+def get_portfolio_history(period: str = "1M"):
+    # Map requested period to Alpaca params
+    if period == "1D":
+        timeframe = "15Min"
+        alpaca_period = "1D"
+    elif period == "1W":
+        timeframe = "1H"
+        alpaca_period = "1W"
+    else: # Default 1M
+        timeframe = "1D"
+        alpaca_period = "1M"
+        
+    request = GetPortfolioHistoryRequest(
+        period=alpaca_period,
+        timeframe=timeframe
+    )
+    return trading_client.get_portfolio_history(request)
+
 def get_portfolio_positions():
     return trading_client.get_all_positions()
 
 def buy_fractional_share(ticker: str, notional_amount: float):
-    """
-    Submits a market order to buy a fractional share based on a dollar amount (notional).
-    """
     try:
         order_data = MarketOrderRequest(
             symbol=ticker,
