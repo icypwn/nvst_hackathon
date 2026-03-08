@@ -80,7 +80,7 @@ struct AppRulesView: View {
             }
         }
         .sheet(isPresented: $showAddModal) {
-            AddRuleModalView(isPresented: $showAddModal, selection: newSelection) { newRule in
+            AddRuleModalView(isPresented: $showAddModal, selection: $newSelection) { newRule in
                 rules.append(newRule)
             }
         }

@@ -3,11 +3,12 @@ import FamilyControls
 
 struct AddRuleModalView: View {
     @Binding var isPresented: Bool
-    var selection: FamilyActivitySelection
+    @Binding var selection: FamilyActivitySelection
     var onAdd: (Rule) -> Void
 
     @State private var rate: Double = 0.10
     @State private var cap: Double = 5
+    @State private var tickerSearch: String = ""
 
     let caps = [5.0, 10.0, 20.0, 50.0]
 
@@ -22,10 +23,20 @@ struct AddRuleModalView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
-                    bridgeVisualizer
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionTitle("SETUP")
+                        bridgeVisualizer
+                    }
 
-                    sectionTitle("CONFIGURATION")
-                    configBox
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionTitle("STOCK TICKER")
+                        tickerSearchField
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionTitle("CONFIGURATION")
+                        configBox
+                    }
                     activateButton
                 }
                 .padding(.horizontal, 24)
@@ -58,11 +69,8 @@ struct AddRuleModalView: View {
                 }
 
                 // Flow Line
-                ZStack {
-                    Capsule()
-                        .fill(Color(white: 0.1))
-                }
-                .frame(height: 6)
+                FlowingLine()
+                    .frame(height: 6)
 
                 // Destination
                 VStack(spacing: 12) {
@@ -86,6 +94,23 @@ struct AddRuleModalView: View {
         .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.05), lineWidth: 1))
     }
 
+    private var tickerSearchField: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(Color(white: 0.4))
+                .font(.system(size: 16))
+            TextField("Search ticker (e.g. AAPL)", text: $tickerSearch)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.characters)
+        }
+        .padding(16)
+        .background(Color(white: 0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
+    }
+
     private var configBox: some View {
         VStack(spacing: 20) {
             // Rate Slider
@@ -95,13 +120,14 @@ struct AddRuleModalView: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(white: 0.6))
                     Spacer()
-                    HStack(spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text("$\(String(format: "%.2f", rate))")
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.green)
-                        Text("/ 1 min")
-                            .foregroundColor(.white)
+                        Text("/ min")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.green)
                     }
-                    .font(.system(size: 16, weight: .bold))
                 }
                 Slider(value: $rate, in: 0.01...1.00, step: 0.01)
                     .accentColor(.green)
@@ -112,13 +138,18 @@ struct AddRuleModalView: View {
             // Daily Limit
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Daily Limit")
+                    Text("Limit")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(white: 0.6))
                     Spacer()
-                    Text("$\(Int(cap)).00")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.green)
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text("$\(Int(cap)).00")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.green)
+                        Text("/ day")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.green)
+                    }
                 }
 
                 HStack(spacing: 8) {
