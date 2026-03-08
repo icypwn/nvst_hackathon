@@ -89,6 +89,11 @@ struct AppRulesView: View {
                 rules.append(newRule)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .onboardingRuleCreated)) { notification in
+            if let rule = notification.object as? Rule {
+                rules.append(rule)
+            }
+        }
     }
 
     private var emptyState: some View {

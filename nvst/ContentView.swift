@@ -94,8 +94,8 @@ struct ContentView: View {
                 showOnboarding = true
             }
         }
-        .onChange(of: manager.isAuthorized) { authorized in
-            if authorized { showOnboarding = false }
+        .onChange(of: manager.isAuthorized) { _ in
+            // Onboarding dismisses itself after the user finishes setup
         }
         .onReceive(NotificationCenter.default.publisher(for: .showTimeSelection)) { _ in
             showTimeSelection = true
