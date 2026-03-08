@@ -23,6 +23,11 @@ struct AddRuleModalView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
+                    Text("Configure your app")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .center)
+
                     VStack(alignment: .leading, spacing: 10) {
                         sectionTitle("SETUP")
                         bridgeVisualizer
@@ -195,7 +200,7 @@ struct AddRuleModalView: View {
             }
             isPresented = false
         } label: {
-            Text("Add App")
+            Text("Confirm App")
                 .font(.system(size: 16, weight: .black))
                 .foregroundColor(.black)
                 .frame(maxWidth: .infinity)
@@ -229,20 +234,22 @@ struct FlowingLine: View {
                         LinearGradient(
                             stops: [
                                 .init(color: .clear, location: 0),
-                                .init(color: .green, location: 0.5),
+                                .init(color: .green.opacity(0.3), location: 0.3),
+                                .init(color: .green.opacity(0.7), location: 0.5),
+                                .init(color: .green.opacity(0.3), location: 0.7),
                                 .init(color: .clear, location: 1)
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .frame(width: geo.size.width * 0.5)
-                    .offset(x: -geo.size.width * 0.5 + (geo.size.width * 1.5 * phase))
+                    .frame(width: geo.size.width * 0.4)
+                    .offset(x: -geo.size.width * 0.7 + (geo.size.width * 1.8 * phase))
             }
             .clipped()
         }
         .onAppear {
-            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: false)) {
                 phase = 1
             }
         }

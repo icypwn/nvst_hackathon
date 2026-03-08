@@ -3,7 +3,8 @@ import FamilyControls
 
 struct RuleCardView: View {
     @Binding var rule: Rule
-    @State private var isExpanded = false
+    @State private var showDetailSheet = false
+    @State private var editSelection = FamilyActivitySelection()
     
     var body: some View {
         VStack(spacing: 0) {
@@ -33,100 +34,11 @@ struct RuleCardView: View {
                 
                 Spacer()
 
-                // Expand chevron
-                Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        isExpanded.toggle()
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(isExpanded ? .green : Color(white: 0.3))
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Color(white: 0.3))
             }
             .padding(.bottom, 8)
-            
-            // Expanded Panel
-            if isExpanded {
-                VStack(spacing: 16) {
-                    // Today's Investment Progress
-                    VStack(spacing: 8) {
-                        HStack {
-                            Text("Today's Investment")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(Color(white: 0.5))
-                            Spacer()
-                            HStack(spacing: 2) {
-                                Text("$\(String(format: "%.2f", rule.todaySpent))")
-                                    .foregroundColor(.green)
-                                Text("/ $\(String(format: "%.2f", rule.cap))")
-                                    .foregroundColor(.white)
-                            }
-                            .font(.system(size: 11, weight: .bold))
-                        }
-                        
-                        // Progress Bar
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color(white: 0.15))
-                                Capsule()
-                                    .fill(Color.green)
-                                    .frame(width: geo.size.width * CGFloat(rule.progressPercent / 100))
-                            }
-                        }
-                        .frame(height: 6)
-                    }
-                    .padding(.bottom, 8)
-                    // Rate Slider
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Investment Amount")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color(white: 0.6))
-                            Spacer()
-                            Text("$\(String(format: "%.2f", rule.rate))")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        
-                        Slider(value: $rule.rate, in: 0.01...1.00, step: 0.01)
-                            .accentColor(.green)
-                    }
-                    .padding(16)
-                    .background(Color.black.opacity(0.3))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
-                    
-                    // Daily Limit
-                    VStack(spacing: 8) {
-                        Text("DAILY LIMIT")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color(white: 0.4))
-                            .tracking(1)
-
-                        HStack {
-                            stepperButton(systemName: "minus") {
-                                if rule.cap > 1 { rule.cap -= 1 }
-                            }
-                            Text("$\(Int(rule.cap))")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.green)
-                                .frame(width: 45)
-                            stepperButton(systemName: "plus") {
-                                rule.cap += 1
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(12)
-                    .background(Color.black.opacity(0.3))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
-                }
-                .padding(.top, 16)
-            }
         }
         .padding(20)
         .background(
@@ -141,8 +53,22 @@ struct RuleCardView: View {
             RoundedRectangle(cornerRadius: 32)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 32))
+        .onTapGesture {
+            if let token = rule.applicationToken {
+                editSelection = FamilyActivitySelection()
+                editSelection.applicationTokens.insert(token)
+            }
+            showDetailSheet = true
+        }
         .opacity(rule.isActive ? 1 : 0.6)
         .grayscale(rule.isActive ? 0 : 0.8)
+        .sheet(isPresented: $showDetailSheet) {
+            AddRuleModalView(isPresented: $showDetailSheet, selection: $editSelection) { updatedRule in
+                rule.rate = updatedRule.rate
+                rule.cap = updatedRule.cap
+            }
+        }
     }
     
     @ViewBuilder
@@ -183,19 +109,6 @@ struct RuleCardView: View {
         .background(Color.green.opacity(0.1))
         .cornerRadius(4)
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.green.opacity(0.2), lineWidth: 1))
-    }
-    
-    private func stepperButton(systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Circle()
-                .fill(Color(white: 0.15))
-                .frame(width: 28, height: 28)
-                .overlay(
-                    Image(systemName: systemName)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                )
-        }
     }
     
     private func formatTime(_ minutes: Int) -> String {

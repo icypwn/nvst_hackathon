@@ -12,6 +12,10 @@ struct AppRulesView: View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             
+            if rules.isEmpty {
+                emptyState
+            }
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     ForEach($rules) { $rule in
@@ -22,6 +26,7 @@ struct AppRulesView: View {
                 .padding(.top, 84)
                 .padding(.bottom, 120)
             }
+            .opacity(rules.isEmpty ? 0 : 1)
             .mask(
                 LinearGradient(
                     stops: [
@@ -86,6 +91,32 @@ struct AppRulesView: View {
         }
     }
 
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            HStack(spacing: 32) {
+                FloatingAppIcon(name: "YouTube", delay: 0)
+                    .rotationEffect(.degrees(-10))
+                FloatingAppIcon(name: "Snapchat", delay: 0.3)
+                    .offset(y: -20)
+                FloatingAppIcon(name: "Instagram", delay: 0.6)
+                    .rotationEffect(.degrees(10))
+            }
+            .offset(y: -8)
+
+            Text("No apps yet")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+            Text("Tap + to select an app")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(Color(white: 0.4))
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var stickyHeader: some View {
         VStack(spacing: 0) {
             headerSection
@@ -132,5 +163,29 @@ struct AppRulesView: View {
             }
             Spacer()
         }
+    }
+}
+
+struct FloatingAppIcon: View {
+    let name: String
+    let delay: Double
+    @State private var floating = false
+
+    var body: some View {
+        Image(name)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 56, height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+            )
+            .offset(y: floating ? -8 : 8)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true).delay(delay)) {
+                    floating = true
+                }
+            }
     }
 }
