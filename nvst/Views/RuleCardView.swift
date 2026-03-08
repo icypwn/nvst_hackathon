@@ -1,10 +1,9 @@
 import SwiftUI
+import FamilyControls
 
 struct RuleCardView: View {
     @Binding var rule: Rule
     @State private var isExpanded = false
-    
-    let timeOptions = [1, 5, 10, 15, 30, 60]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -12,49 +11,41 @@ struct RuleCardView: View {
             HStack(spacing: 12) {
                 appIcon
                 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(rule.appName)
+                VStack(alignment: .leading, spacing: 6) {
+                    if let token = rule.applicationToken {
+                        Label(token)
+                            .labelStyle(.titleOnly)
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
-                        Text("→ \(rule.ticker)")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(Color(white: 0.4))
+                    } else {
+                        HStack(spacing: 4) {
+                            Text(rule.appName)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                            Text("→ \(rule.ticker)")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(Color(white: 0.4))
+                        }
                     }
-                    
+
                     summaryBadge
                 }
                 
                 Spacer()
-                
-                iosToggle
+
+                // Expand chevron
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(isExpanded ? .green : Color(white: 0.3))
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
             }
             .padding(.bottom, 8)
-            
-            // Expand Button
-            Button {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                VStack(spacing: 12) {
-                    Divider()
-                        .background(Color.white.opacity(0.1))
-                    
-                    HStack(spacing: 4) {
-                        Text(isExpanded ? "CLOSE SETTINGS" : "EDIT SETTINGS")
-                            .font(.system(size: 10, weight: .bold))
-                            .tracking(1)
-                            .foregroundColor(isExpanded ? .green : Color(white: 0.4))
-                        
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(isExpanded ? .green : Color(white: 0.4))
-                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                    }
-                }
-                .padding(.top, 8)
-            }
             
             // Expanded Panel
             if isExpanded {
@@ -108,60 +99,31 @@ struct RuleCardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
                     
-                    // Frequency & Limit
-                    HStack(spacing: 12) {
-                        // Frequency
-                        VStack(spacing: 8) {
-                            Text("FREQUENCY")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(Color(white: 0.4))
-                                .tracking(1)
-                            
-                            HStack {
-                                stepperButton(systemName: "minus") {
-                                    changeTime(direction: -1)
-                                }
-                                Text(formatTime(rule.timeSpan))
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 45)
-                                stepperButton(systemName: "plus") {
-                                    changeTime(direction: 1)
-                                }
+                    // Daily Limit
+                    VStack(spacing: 8) {
+                        Text("DAILY LIMIT")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(white: 0.4))
+                            .tracking(1)
+
+                        HStack {
+                            stepperButton(systemName: "minus") {
+                                if rule.cap > 1 { rule.cap -= 1 }
+                            }
+                            Text("$\(Int(rule.cap))")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.green)
+                                .frame(width: 45)
+                            stepperButton(systemName: "plus") {
+                                rule.cap += 1
                             }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(12)
-                        .background(Color.black.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
-                        
-                        // Daily Limit
-                        VStack(spacing: 8) {
-                            Text("DAILY LIMIT")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(Color(white: 0.4))
-                                .tracking(1)
-                            
-                            HStack {
-                                stepperButton(systemName: "minus") {
-                                    if rule.cap > 1 { rule.cap -= 1 }
-                                }
-                                Text("$\(Int(rule.cap))")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(.green)
-                                    .frame(width: 45)
-                                stepperButton(systemName: "plus") {
-                                    rule.cap += 1
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(12)
-                        .background(Color.black.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(Color.black.opacity(0.3))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
                 }
                 .padding(.top, 16)
             }
@@ -183,21 +145,29 @@ struct RuleCardView: View {
         .grayscale(rule.isActive ? 0 : 0.8)
     }
     
+    @ViewBuilder
     private var appIcon: some View {
-        ZStack {
-            if rule.gradientColors.count > 1 {
-                LinearGradient(colors: rule.gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
-            } else {
-                rule.gradientColors.first ?? .clear
+        if let token = rule.applicationToken {
+            Label(token)
+                .labelStyle(.iconOnly)
+                .scaleEffect(1.8)
+                .frame(width: 40, height: 40)
+        } else {
+            ZStack {
+                if rule.gradientColors.count > 1 {
+                    LinearGradient(colors: rule.gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                } else {
+                    rule.gradientColors.first ?? .clear
+                }
             }
+            .frame(width: 40, height: 40)
+            .cornerRadius(12)
+            .overlay(
+                Text(rule.appInitial)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+            )
         }
-        .frame(width: 40, height: 40)
-        .cornerRadius(12)
-        .overlay(
-            Text(rule.appInitial)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.white)
-        )
     }
     
     private var summaryBadge: some View {
@@ -213,57 +183,6 @@ struct RuleCardView: View {
         .background(Color.green.opacity(0.1))
         .cornerRadius(4)
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.green.opacity(0.2), lineWidth: 1))
-    }
-    
-    private var iosToggle: some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                rule.isActive.toggle()
-            }
-        } label: {
-            ZStack {
-                // Background Track
-                Capsule()
-                    .fill(rule.isActive ? Color.green.opacity(0.15) : Color.white.opacity(0.05))
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                LinearGradient(
-                                    colors: rule.isActive ? [.green.opacity(0.3), .green.opacity(0.1)] : [.white.opacity(0.2), .white.opacity(0.05)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                
-                // Track material
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .opacity(rule.isActive ? 0.3 : 0.1)
-                
-                // Glow effect when active
-                if rule.isActive {
-                    Capsule()
-                        .fill(Color.green.opacity(0.2))
-                        .blur(radius: 8)
-                }
-                
-                // Thumb
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: rule.isActive ? [.white, Color(white: 0.9)] : [Color(white: 0.8), Color(white: 0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .shadow(color: rule.isActive ? .green.opacity(0.5) : .black.opacity(0.3), radius: 4, y: 2)
-                    .padding(3)
-                    .offset(x: rule.isActive ? 11 : -11)
-            }
-            .frame(width: 52, height: 30)
-        }
     }
     
     private func stepperButton(systemName: String, action: @escaping () -> Void) -> some View {
@@ -284,12 +203,4 @@ struct RuleCardView: View {
         return "\(minutes) min"
     }
     
-    private func changeTime(direction: Int) {
-        if let currentIndex = timeOptions.firstIndex(of: rule.timeSpan) {
-            let nextIndex = currentIndex + direction
-            if nextIndex >= 0 && nextIndex < timeOptions.count {
-                rule.timeSpan = timeOptions[nextIndex]
-            }
-        }
-    }
 }

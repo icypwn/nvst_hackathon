@@ -1,4 +1,6 @@
 import SwiftUI
+import ManagedSettings
+import FamilyControls
 
 struct Rule: Identifiable {
     let id: String
@@ -11,7 +13,8 @@ struct Rule: Identifiable {
     var cap: Double
     var todaySpent: Double
     var isActive: Bool
-    
+    var applicationToken: ApplicationToken?
+
     var progressPercent: Double {
         let progress = (todaySpent / cap) * 100
         return min(progress, 100)

@@ -216,7 +216,6 @@ struct HomeView: View {
     @ObservedObject var manager: ScreenTimeManager
     @Binding var showTimeSelection: Bool
     @State private var selectedTab = 0
-    @State private var showActivityPicker = false
     let tabs = ["Today", "This Week", "All Time"]
 
     var body: some View {
@@ -225,24 +224,6 @@ struct HomeView: View {
                 headerSection
                 ringChartSection
                 tabPicker
-
-                // Activity picker button
-                Button {
-                    showActivityPicker = true
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text(manager.selection.applicationTokens.isEmpty
-                             ? "Select Apps to Track"
-                             : "Manage Tracked Apps (\(manager.selection.applicationTokens.count))")
-                    }
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Capsule().fill(.green))
-                }
-                .familyActivityPicker(isPresented: $showActivityPicker, selection: $manager.selection)
 
                 sharesSection
             }

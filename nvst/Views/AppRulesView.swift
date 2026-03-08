@@ -1,26 +1,21 @@
 import SwiftUI
+import FamilyControls
 
 struct AppRulesView: View {
-    @State private var rules: [Rule] = [
-        Rule(id: "ig", appName: "Instagram", appInitial: "I", gradientColors: [.orange, .pink, .purple], ticker: "META", rate: 0.10, timeSpan: 1, cap: 5.00, todaySpent: 3.50, isActive: true),
-        Rule(id: "tt", appName: "TikTok", appInitial: "T", gradientColors: [Color.black], ticker: "BDNCE", rate: 0.25, timeSpan: 5, cap: 10.00, todaySpent: 10.00, isActive: true),
-        Rule(id: "yt", appName: "YouTube", appInitial: "Y", gradientColors: [.red], ticker: "GOOGL", rate: 0.05, timeSpan: 15, cap: 2.00, todaySpent: 0.45, isActive: true)
-    ]
+    @State private var rules: [Rule] = []
     
+    @State private var showActivityPicker = false
     @State private var showAddModal = false
-    
+    @State private var newSelection = FamilyActivitySelection()
+
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
-                    trackNewAppButton
-                    
-                    VStack(spacing: 20) {
-                        ForEach($rules) { $rule in
-                            RuleCardView(rule: $rule)
-                        }
+                    ForEach($rules) { $rule in
+                        RuleCardView(rule: $rule)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -42,12 +37,30 @@ struct AppRulesView: View {
             
             stickyHeader
             
-            if showAddModal {
-                AddRuleModalView(isPresented: $showAddModal) { newRule in
-                    rules.append(newRule)
+            // FAB - Add Rule
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button {
+                        newSelection = FamilyActivitySelection()
+                        showActivityPicker = true
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 56, height: 56)
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.black)
+                        }
+                        .shadow(color: .green.opacity(0.4), radius: 10, y: 4)
+                    }
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 100)
                 }
             }
-            
+
             // Bottom Fade
             VStack {
                 Spacer()
@@ -57,8 +70,22 @@ struct AppRulesView: View {
             }
             .ignoresSafeArea()
         }
+        .sheet(isPresented: $showActivityPicker, onDismiss: {
+            if !newSelection.applicationTokens.isEmpty {
+                showAddModal = true
+            }
+        }) {
+            ActivityPickerView(selection: $newSelection) {
+                showActivityPicker = false
+            }
+        }
+        .sheet(isPresented: $showAddModal) {
+            AddRuleModalView(isPresented: $showAddModal, selection: newSelection) { newRule in
+                rules.append(newRule)
+            }
+        }
     }
-    
+
     private var stickyHeader: some View {
         VStack(spacing: 0) {
             headerSection
@@ -104,73 +131,6 @@ struct AppRulesView: View {
                     .foregroundColor(.white)
             }
             Spacer()
-            
-            balanceButton
-        }
-    }
-    
-    private var balanceButton: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("BALANCE")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.gray)
-                    .tracking(1)
-                Text("$142.50")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            
-            ZStack {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 32, height: 32)
-                Image(systemName: "plus")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.black)
-            }
-            .shadow(color: .green.opacity(0.3), radius: 6)
-        }
-        .padding(.leading, 12)
-        .padding(.trailing, 4)
-        .padding(.vertical, 4)
-        .background(Color(white: 0.1))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
-    }
-    
-    private var trackNewAppButton: some View {
-        Button {
-            withAnimation(.spring()) {
-                showAddModal = true
-            }
-        } label: {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(Color.green.opacity(0.15))
-                        .frame(width: 48, height: 48)
-                    Image(systemName: "plus")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.green)
-                }
-                
-                Text("Track New App")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
-                
-                Text("Link an app to a stock ticker")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.green.opacity(0.8))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
-            .background(
-                RoundedRectangle(cornerRadius: 32)
-                    .strokeBorder(Color.green.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [6]))
-                    .background(Color.green.opacity(0.05))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 32))
         }
     }
 }
